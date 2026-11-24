@@ -269,6 +269,10 @@
         delta = Math.max(-40, Math.min(40, delta)) * weight;
         s.rating += delta;
         s.impactSum = (s.impactSum || 0) + impact;
+        s.impHist = s.impHist || [];
+        s.impHist.push({ m: m.id, v: impact, date: m.start, map: m.map });
+        s.untraded = (s.untraded || 0) + e.untraded;
+        s.isoDeaths = (s.isoDeaths || 0) + e.iso;
         m._ratingDelta[p.p] = delta;
         s.ratingHist.push({ m: m.id, r: s.rating, d: delta, date: m.start });
       }

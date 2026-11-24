@@ -88,6 +88,7 @@ async function init() {
     return;
   }
   S.st = V.compute(S.data.matches, { minGames: S.cfg.league_min_games || 3 });
+  S._attrs = null;
   if (!S.st.matches.length) { app.innerHTML = '<div class="loading">Henüz maç yok.</div>'; return; }
   const upd = S.data.meta && S.data.meta.updated;
   document.getElementById('foot').innerHTML = `${S.st.matches.length} maç. Son güncelleme ${upd ? new Date(upd).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' }) : '–'}. Riot Games ile bağlantısı yoktur.`;
@@ -218,7 +219,9 @@ function vPlayer(id) {
       <div class="muted">${rank ? rank + '. sırada' : 'Misafir oyuncu'}, ${p.games} maç ${formHtml(p.form)}</div></div>
       <div style="margin-left:auto;text-align:right"><div class="big">${f0(p.rating)}</div><div class="muted">lig puanı</div></div>
     </div>
-    <div class="card" style="margin-bottom:16px"><h3>Puan gidişatı</h3>${ratingChart(p)}</div>
+    <h2>Oyuncu kartı</h2>
+    ${fmProfile(p)}
+    <div class="card section" style="margin-bottom:16px"><h3>Puan gidişatı</h3>${ratingChart(p)}</div>
     <div class="grid g4">
       ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Pusu kill', p.ambush || 0], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
     </div>
@@ -302,6 +305,128 @@ function playerBadges(p) {
 function weaponName(w) {
   const a = S.assets.weapons[w];
   return a && a.icon ? `<span class="pname"><img src="${a.icon}" style="width:56px;height:20px;object-fit:contain;background:none">${esc(w)}</span>` : esc(w);
+}
+
+
+// ---------- FM tarzı profil ----------
+const PISTOLS = ['Classic', 'Shorty', 'Frenzy', 'Ghost', 'Sheriff'];
+const LONG = ['Operator', 'Marshal', 'Outlaw', 'Guardian'];
+function rawAttrs(p) {
+  const r = Math.max(1, p.rounds), k = Math.max(1, p.kills), d = Math.max(1, p.deaths);
+  const sum = (list) => list.reduce((x, w) => x + (p.weapons[w] || 0), 0);
+  const imps = (p.impHist || []).map((x) => x.v);
+  const mean = imps.reduce((a, b) => a + b, 0) / Math.max(1, imps.length);
+  const sd = Math.sqrt(imps.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(1, imps.length));
+  return {
+    'Nişancılık': p.hsPct,
+    'Öldürücülük': p.kpr,
+    'Hasar': p.adr,
+    'Uzun menzil': sum(LONG) / k,
+    'Tabanca': sum(PISTOLS) / k,
+    'Giriş': p.fb / r,
+    'Soğukkanlılık': (p.clutchWon + 1) / (p.clutchAtt + 3),
+    'Hayatta kalma': -p.deaths / r,
+    'Pozisyon alma': -(p.isoDeaths || 0) / d,
+    'Sinsilik': (p.ambush || 0) / k,
+    'Takım oyunu': p.assists / r,
+    'KAST': p.kast,
+    'Destek bekleme': -(p.untraded || 0) / d,
+    'Ekonomi': p.ecoKills / r,
+    'Tutarlılık': -sd,
+    'Kazanma': p.winPct,
+  };
+}
+const ATTR_GROUPS = [
+  ['Silah', ['Nişancılık', 'Öldürücülük', 'Hasar', 'Uzun menzil', 'Tabanca']],
+  ['Oyun zekası', ['Giriş', 'Soğukkanlılık', 'Hayatta kalma', 'Pozisyon alma', 'Sinsilik']],
+  ['Takım', ['Takım oyunu', 'KAST', 'Destek bekleme', 'Ekonomi', 'Tutarlılık', 'Kazanma']],
+];
+const ATTR_HELP = {
+  'Nişancılık': 'Kafa vuruşu yüzdesi', 'Öldürücülük': 'Raund başına kill', 'Hasar': 'Raund başına hasar',
+  'Uzun menzil': 'Operator, Marshal, Outlaw ve Guardian ile alınan kill payı', 'Tabanca': 'Tabancalarla alınan kill payı',
+  'Giriş': 'Raund başına ilk kan', 'Soğukkanlılık': 'Clutch kazanma oranı', 'Hayatta kalma': 'Raund başına ne kadar az öldüğü',
+  'Pozisyon alma': 'Takımından uzakta yalnız ölmeme', 'Sinsilik': 'Arkadan, pusudan aldığı kill payı',
+  'Takım oyunu': 'Raund başına asist', 'KAST': 'Katkı yaptığı raund yüzdesi', 'Destek bekleme': 'Ölümlerinin ne kadarının intikamı alındığı',
+  'Ekonomi': 'Daha ucuz silahla pahalı rakibi öldürme', 'Tutarlılık': 'Maçtan maça performansının ne kadar az oynadığı', 'Kazanma': 'Kazanma yüzdesi',
+};
+function attrTable() {
+  if (S._attrs) return S._attrs;
+  const L = leaguePlayers();
+  const raws = {}; L.forEach((p) => (raws[p.puuid] = rawAttrs(p)));
+  const out = {};
+  L.forEach((p) => (out[p.puuid] = {}));
+  Object.keys(raws[L[0].puuid] || {}).forEach((a) => {
+    const vals = L.map((p) => raws[p.puuid][a]);
+    L.forEach((p) => {
+      const v = raws[p.puuid][a];
+      const below = vals.filter((x) => x < v).length, eq = vals.filter((x) => x === v).length;
+      const pctl = (below + (eq - 1) / 2) / Math.max(1, vals.length - 1);
+      out[p.puuid][a] = Math.max(1, Math.min(20, Math.round(1 + 19 * pctl)));
+    });
+  });
+  S._attrs = out;
+  return out;
+}
+const attrCls = (v) => (v >= 16 ? 'a4' : v >= 11 ? 'a3' : v >= 6 ? 'a2' : 'a1');
+function matchRating(imp) { return Math.max(4, Math.min(10, 6.5 + (imp - 1) * 4)); }
+function roleOf(at) {
+  const roles = [
+    ['Giriş oyuncusu', at['Giriş'] * 2 + at['Öldürücülük']],
+    ['Fare (lurker)', at['Sinsilik'] * 2 + at['Pozisyon alma'] * 0.2],
+    ['Keskin nişancı', at['Uzun menzil'] * 2 + at['Nişancılık']],
+    ['Destekçi', at['Takım oyunu'] * 2 + at['KAST']],
+    ['Çapa', at['Hayatta kalma'] * 2 + at['Pozisyon alma']],
+  ];
+  return roles.sort((a, b) => b[1] - a[1])[0][0];
+}
+function traitsOf(p, at) {
+  const t = [];
+  if (at['Sinsilik'] >= 16) t.push('Arkadan dolanmayı sever');
+  if (at['Uzun menzil'] >= 16) t.push("Op'u bırakmaz");
+  if (at['Giriş'] >= 16) t.push('Siteye ilk o girer');
+  if (at['Tabanca'] >= 16) t.push('Tabanca raundlarında tehlikeli');
+  if (at['Ekonomi'] >= 16) t.push('Eko raundlarda pahalı silah toplar');
+  if (at['Soğukkanlılık'] >= 16) t.push('Baskı altında parlar');
+  if (at['Soğukkanlılık'] <= 4) t.push('Clutch anında titrer');
+  if (at['Pozisyon alma'] <= 4) t.push('Takımından kopup yalnız ölür');
+  if (at['Tutarlılık'] <= 4) t.push('Bir gün kral, bir gün yok');
+  if (at['Tutarlılık'] >= 17) t.push('Her maç aynı seviyede');
+  if (at['Takım oyunu'] >= 16) t.push('Asist makinesi');
+  if ((p.weapons.Sheriff || 0) >= 8) t.push('Sheriff ile kafa avcısı');
+  return t;
+}
+function radar(at) {
+  const cats = ATTR_GROUPS.flatMap(([, list]) => list).filter((a) => ['Nişancılık', 'Öldürücülük', 'Giriş', 'Soğukkanlılık', 'Hayatta kalma', 'Takım oyunu', 'Sinsilik', 'Tutarlılık'].includes(a));
+  const R = 90, cx = 120, cy = 112, n = cats.length;
+  const pt = (i, v) => { const ang = -Math.PI / 2 + (2 * Math.PI * i) / n; return [cx + Math.cos(ang) * R * v, cy + Math.sin(ang) * R * v]; };
+  const ring = (f) => cats.map((_, i) => pt(i, f).join(',')).join(' ');
+  const poly = cats.map((a, i) => pt(i, at[a] / 20).join(',')).join(' ');
+  return `<svg viewBox="-36 -6 312 240" class="radar" role="img" aria-label="Özellik radarı">
+    ${[0.25, 0.5, 0.75, 1].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="#2c4152"/>`).join('')}
+    <polygon points="${poly}" fill="rgba(255,70,85,.28)" stroke="#ff4655" stroke-width="2"/>
+    ${cats.map((a, i) => { const [x, y] = pt(i, 1.2); return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#96a3ad" font-size="9">${a}</text>`; }).join('')}
+  </svg>`;
+}
+function fmProfile(p) {
+  if (!p.league) return `<div class="card muted">Özellik kartı için en az ${S.cfg.league_min_games || 3} maç gerekiyor.</div>`;
+  const at = attrTable()[p.puuid];
+  const last = (p.impHist || []).slice(-6);
+  const avgR = (p.impHist || []).reduce((x, h) => x + matchRating(h.v), 0) / Math.max(1, (p.impHist || []).length);
+  const stars = Math.max(0.5, Math.min(5, Math.round(((V.strength(S.st.players, p.puuid) - 800) / 80) * 2) / 2));
+  const starHtml = [1, 2, 3, 4, 5].map((i) => `<span class="${stars >= i ? 'on' : stars >= i - 0.5 ? 'half' : ''}">★</span>`).join('');
+  const traits = traitsOf(p, at);
+  return `<div class="fm">
+    <div class="fm-side">
+      <div class="fm-role"><span class="muted">Rol</span><b>${roleOf(at)}</b></div>
+      <div class="fm-role"><span class="muted">Güç</span><span class="stars" title="Maç başına etkiden">${starHtml}</span></div>
+      <div class="fm-role"><span class="muted">Ortalama maç notu</span><b class="num" style="font-size:28px">${avgR.toFixed(2)}</b></div>
+      <div><span class="muted">Son maçlar</span><div class="fm-form">${last.map((h) => { const r = matchRating(h.v); return `<a href="#/mac/${h.m}" title="${esc(h.map)}, ${dateTR(h.date)}" class="rt ${r >= 7.5 ? 'hi' : r >= 6.5 ? 'mid' : 'lo'}">${r.toFixed(1)}</a>`; }).join('')}</div></div>
+      ${radar(at)}
+      ${traits.length ? `<div><span class="muted">Özellikler</span><ul class="fm-traits">${traits.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
+    </div>
+    <div class="fm-attrs">${ATTR_GROUPS.map(([g, list]) => `<div class="fm-group"><h3>${g}</h3>${list.map((a) => `<div class="fm-row" title="${esc(ATTR_HELP[a])}"><span>${a}</span><b class="${attrCls(at[a])}">${at[a]}</b></div>`).join('')}</div>`).join('')}</div>
+  </div>
+  <p class="muted" style="font-size:13px;margin-top:8px">Özellikler 1-20 arası, ligdeki diğer oyunculara göre hesaplanır. 20 en iyisi demek. Bir özelliğin üstüne gelince neyi ölçtüğü görünür.</p>`;
 }
 
 // ---------- Isı haritası ----------

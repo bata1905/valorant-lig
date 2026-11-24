@@ -190,3 +190,26 @@ label.chk{display:inline-flex;gap:8px;align-items:center;color:var(--muted);font
   .mcard{grid-template-columns:84px 1fr}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* FM tarzı oyuncu kartı */
+.fm{display:grid;grid-template-columns:300px 1fr;gap:14px}
+.fm-side,.fm-group{background:var(--panel);border-left:3px solid var(--line);padding:16px 18px}
+.fm-side{display:flex;flex-direction:column;gap:14px}
+.fm-role{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.fm-role b{font-weight:700}
+.stars{color:var(--dim);font-size:18px;letter-spacing:2px}
+.stars .on{color:#f5c451} .stars .half{background:linear-gradient(90deg,#f5c451 50%,var(--dim) 50%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.fm-form{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.fm-form .rt{font-family:var(--dot);font-weight:800;font-size:16px;padding:3px 8px;min-width:42px;text-align:center}
+.rt.hi{background:var(--win);color:#06281e} .rt.mid{background:var(--panel2);color:var(--text)} .rt.lo{background:var(--loss);color:#fff}
+.fm-traits{margin:6px 0 0;padding-left:18px;color:var(--text)}
+.fm-traits li{margin:3px 0}
+.radar{width:100%;max-width:260px;align-self:center}
+.fm-attrs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-content:start}
+.fm-group h3{margin-bottom:8px}
+.fm-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(44,65,82,.6);cursor:help}
+.fm-row:last-child{border-bottom:none}
+.fm-row b{font-family:var(--dot);font-weight:900;font-size:22px;min-width:32px;text-align:right}
+.a1{color:var(--dim)} .a2{color:var(--muted)} .a3{color:var(--text)} .a4{color:var(--win)}
+@media (max-width:900px){.fm{grid-template-columns:1fr}.fm-attrs{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.fm-attrs{grid-template-columns:1fr}}
