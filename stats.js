@@ -437,7 +437,10 @@
     return results.slice(0, top);
   }
 
-  const api = { compute, winProb, balance, synergy, nightKey, strength, matchup, START_RATING };
+  // FIFA/FM tarzı genel güç (OVR): 70 lobi ortalaması, her 0.10 etki ≈ 5 puan, 40-99 arası.
+  function ovrFrom(str) { return Math.max(40, Math.min(99, Math.round(70 + (str - START_RATING) / 10))); }
+  function ovr(P, id) { return ovrFrom(strength(P, id)); }
+  const api = { compute, winProb, balance, synergy, nightKey, strength, matchup, ovr, ovrFrom, START_RATING };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VStats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

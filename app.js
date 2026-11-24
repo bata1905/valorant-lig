@@ -447,7 +447,7 @@ function fmProfile(p) {
   return `<div class="fm">
     <div class="fm-side">
       <div class="fm-role"><span class="muted">Rol</span><b>${roleOf(at)}</b></div>
-      <div class="fm-role"><span class="muted">Güç</span><span class="stars" title="Maç başına etkiden">${starHtml}</span></div>
+      <div class="fm-role"><span class="muted">Genel güç (OVR)</span><b class="ovr big-ovr ${ovrCls(V.ovr(S.st.players, p.puuid))}">${V.ovr(S.st.players, p.puuid)}</b></div>
       <div class="fm-role"><span class="muted">Ortalama maç notu</span><b class="num" style="font-size:28px">${avgR.toFixed(2)}</b></div>
       <div><span class="muted">Son maçlar</span><div class="fm-form">${last.map((h) => { const r = matchRating(h.v); return `<a href="#/mac/${h.m}" title="${esc(h.map)}, ${dateTR(h.date)}" class="rt ${r >= 7.5 ? 'hi' : r >= 6.5 ? 'mid' : 'lo'}">${r.toFixed(1)}</a>`; }).join('')}</div></div>
       ${radar(at)}
@@ -662,9 +662,10 @@ function vMatch(id) {
 }
 
 // ---------- Takım kurucu ----------
-const pow = (id) => V.strength(S.st.players, id);
+const ovrCls = (v) => (v >= 85 ? 'o4' : v >= 75 ? 'o3' : v >= 65 ? 'o2' : 'o1');
+const pow = (id) => V.ovr(S.st.players, id);
 function teamList(ids, cls) {
-  return `<ul>${ids.map((id) => `<li>${pLink(id, true)} <span class="num muted" title="Güç (etkiden)">${f0(pow(id))}</span></li>`).join('')}</ul>`;
+  return `<ul>${ids.map((id) => `<li>${pLink(id, true)} <span class="ovr ${ovrCls(pow(id))}" title="Genel güç (OVR)">${pow(id)}</span></li>`).join('')}</ul>`;
 }
 function probBar(prob) {
   return `<div class="probbar"><span style="width:${prob * 100}%"></span><span style="width:${(1 - prob) * 100}%"></span></div>
@@ -700,8 +701,8 @@ function vTeams() {
   const sel = ps.map((p) => p.puuid).filter((id) => st.sel.has(id));
   const opts = (chosen) => sel.map((id) => `<option value="${id}" ${id === chosen ? 'selected' : ''}>${esc(nm(id))}</option>`).join('');
 
-  const picker = `<div class="card"><div class="picker">${ps.map((p) => `<label class="${st.sel.has(p.puuid) ? 'on' : ''}"><input type="checkbox" data-p="${p.puuid}" ${st.sel.has(p.puuid) ? 'checked' : ''}>${esc(p.name)} <span class="num muted">${f0(pow(p.puuid))}</span></label>`).join('')}</div>
-    <div class="muted" style="margin-top:10px">${st.sel.size} oyuncu seçili. Yanındaki sayı oyuncunun gücü: maç başına etkisinden hesaplanır, 1000 lobi ortalaması.</div></div>`;
+  const picker = `<div class="card"><div class="picker">${ps.map((p) => `<label class="${st.sel.has(p.puuid) ? 'on' : ''}"><input type="checkbox" data-p="${p.puuid}" ${st.sel.has(p.puuid) ? 'checked' : ''}>${esc(p.name)} <span class="ovr ${ovrCls(pow(p.puuid))}">${pow(p.puuid)}</span></label>`).join('')}</div>
+    <div class="muted" style="margin-top:10px">${st.sel.size} oyuncu seçili. Yanındaki sayı FIFA'daki gibi genel güç (OVR): maç başına performanstan hesaplanır, 70 lig ortalaması, 99 en yüksek.</div></div>`;
 
   const modeBar = `<div class="filters section">
     <button data-mode="auto" class="${st.mode === 'auto' ? 'primary' : ''}">Otomatik dengele</button>
@@ -724,9 +725,9 @@ function vTeams() {
       </div>
       ${r ? `<div class="card section">
         <div class="filters">${res.map((x, i) => `<button data-i="${i}" class="${i === st.pick ? 'primary' : ''}">Seçenek ${i + 1}: %${Math.round(x.prob * 100)}-%${Math.round((1 - x.prob) * 100)}</button>`).join('')}</div>
-        <div class="split"><div><h2 class="team-Red">Takım A</h2>${teamList(r.A)}<div class="muted">Takım gücü ${f0(r.pa)}</div></div>
+        <div class="split"><div><h2 class="team-Red">Takım A</h2>${teamList(r.A)}<div class="muted">Takım gücü <b class="ovr ${ovrCls(V.ovrFrom(r.pa))}">${V.ovrFrom(r.pa)}</b></div></div>
           <div class="vs">VS</div>
-          <div><h2 class="team-Blue">Takım B</h2>${teamList(r.B)}<div class="muted">Takım gücü ${f0(r.pb)}</div></div></div>
+          <div><h2 class="team-Blue">Takım B</h2>${teamList(r.B)}<div class="muted">Takım gücü <b class="ovr ${ovrCls(V.ovrFrom(r.pb))}">${V.ovrFrom(r.pb)}</b></div></div></div>
         ${probBar(r.prob)}
       </div>` : `<div class="card section muted">${sel.length < 2 ? 'En az 2 oyuncu seç.' : 'Bu kurallarla takım kurulamıyor. Bir kuralı sil.'}</div>`}`;
   } else {
@@ -779,7 +780,7 @@ function vTeams() {
       </div>
       ${turn ? `<div class="card section"><h2 class="team-${turn === 'A' ? 'Red' : 'Blue'}">Sıra: Kaptan ${turn} (${esc(nm(d[turn][0]))})</h2>
         <p class="muted">En güçlü kalan: <b>${esc(nm(strongest))}</b>. Maçı dengeli tutmak için öneri: <b>${esc(nm(fairest))}</b>.</p>
-        <div class="picker">${pool.map((id) => `<label data-dpick="${id}" class="${id === fairest ? 'on' : ''}">${esc(nm(id))} <span class="num muted">${f0(pow(id))}</span></label>`).join('')}</div>
+        <div class="picker">${pool.map((id) => `<label data-dpick="${id}" class="${id === fairest ? 'on' : ''}">${esc(nm(id))} <span class="ovr ${ovrCls(pow(id))}">${pow(id)}</span></label>`).join('')}</div>
       </div>` : `<div class="card section"><h2>Seçim tamamlandı</h2></div>`}
       <div class="filters section"><button id="dundo">Geri al</button><button id="dreset">Baştan başla</button></div>`;
     }
