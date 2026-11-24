@@ -136,12 +136,10 @@
           if (teamOf[k.k] !== teamOf[k.v]) {
             m._wk[k.k] += vw ? vw[k.v] || 1 : 1;
             const s = P[k.k];
-            if (viewCal && k.vv != null && k.kx != null && k.x != null) {
-              const dx = k.kx - k.x, dy = k.ky - k.y;
-              if (dx * dx + dy * dy >= 300 * 300 && angDiff(viewCal.sg * k.vv + viewCal.off, Math.atan2(dy, dx)) > AMBUSH_ANGLE) {
-                s.ambush = (s.ambush || 0) + 1;
-                k._ambush = true;
-              }
+            // Pusu (fare) kill: katil, en yakın takım arkadaşından 25 metreden uzakta tek başına
+            if (k.knd != null && k.knd > ISO_DIST) {
+              s.ambush = (s.ambush || 0) + 1;
+              k._ambush = true;
             }
             s.weapons[k.w] = (s.weapons[k.w] || 0) + 1;
             const on = (s.killsOn[k.v] = s.killsOn[k.v] || { total: 0, w: {} });

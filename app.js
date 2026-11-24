@@ -345,7 +345,7 @@ const ATTR_HELP = {
   'Nişancılık': 'Kafa vuruşu yüzdesi', 'Öldürücülük': 'Raund başına kill', 'Hasar': 'Raund başına hasar',
   'Uzun menzil': 'Operator, Marshal, Outlaw ve Guardian ile alınan kill payı', 'Tabanca': 'Tabancalarla alınan kill payı',
   'Giriş': 'Raund başına ilk kan', 'Soğukkanlılık': 'Clutch kazanma oranı', 'Hayatta kalma': 'Raund başına ne kadar az öldüğü',
-  'Pozisyon alma': 'Takımından uzakta yalnız ölmeme', 'Sinsilik': 'Arkadan, pusudan aldığı kill payı',
+  'Pozisyon alma': 'Takımından uzakta yalnız ölmeme', 'Sinsilik': 'Takımından 25 metreden uzakta, tek başına pusudan aldığı kill payı',
   'Takım oyunu': 'Raund başına asist', 'KAST': 'Katkı yaptığı raund yüzdesi', 'Destek bekleme': 'Ölümlerinin ne kadarının intikamı alındığı',
   'Ekonomi': 'Daha ucuz silahla pahalı rakibi öldürme', 'Tutarlılık': 'Maçtan maça performansının ne kadar az oynadığı', 'Kazanma': 'Kazanma yüzdesi',
 };
