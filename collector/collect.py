@@ -21,7 +21,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 MATCHES_FILE = DATA / "matches.json"
 CONFIG_FILE = DATA / "config.json"
-SCHEMA = 2  # veri biçimi sürümü; eski kayıtlar yeniden çekilir
+SCHEMA = 3  # veri biçimi sürümü; eski kayıtlar yeniden çekilir
 SLEEP = 4  # istekler arası bekleme (dakikada 30 istek sınırı)
 
 KEY = os.environ.get("HENRIK_KEY", "").strip()
@@ -128,6 +128,20 @@ def slim(m):
         victim = (k.get("victim") or {}).get("puuid")
         vteam = (k.get("victim") or {}).get("team")
         nd = None
+        vv = None   # ölenin baktığı yön (radyan)
+        knd = None  # katilin en yakın takım arkadaşına uzaklığı
+        kteam = (k.get("killer") or {}).get("team")
+        for pl in k.get("player_locations") or []:
+            pp = pl.get("player") or {}
+            if pp.get("puuid") == victim and pl.get("view_radians") is not None:
+                vv = round(pl["view_radians"], 3)
+        if kx is not None:
+            for pl in k.get("player_locations") or []:
+                pp = pl.get("player") or {}
+                l2 = pl.get("location") or {}
+                if pp.get("team") == kteam and pp.get("puuid") != killer and l2.get("x") is not None:
+                    d = ((l2["x"] - kx) ** 2 + (l2["y"] - ky) ** 2) ** 0.5
+                    knd = d if knd is None or d < knd else knd
         if loc.get("x") is not None:
             for pl in k.get("player_locations") or []:
                 pp = pl.get("player") or {}
@@ -144,6 +158,7 @@ def slim(m):
             "w": wname, "wt": wtype,
             "x": loc.get("x"), "y": loc.get("y"), "kx": kx, "ky": ky,
             "nd": round(nd) if nd is not None else None,
+            "vv": vv, "knd": round(knd) if knd is not None else None,
         })
     return {
         "v": SCHEMA, "id": md["match_id"], "start": md.get("started_at"), "map": map_name(m),
