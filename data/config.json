@@ -1,5 +1,7 @@
 {
-  "seed_players": ["Bata1905#1905"],
+  "seed_players": [
+    "Bata1905#1905"
+  ],
   "collect_min_games": 2,
   "league_min_games": 3,
   "exclude_match_ids": [],
@@ -18,6 +20,24 @@
     "8af84d33-4a0a-4fa2-864d-3b0f115660d5",
     "59a7e153-ed38-4669-ac18-9798ab901dc7",
     "41e4e38e-593c-48a0-af6b-9e3e41a373b5",
-    "aa6c7bc1-50ff-41cf-92be-921cb4fb30d1"
+    "aa6c7bc1-50ff-41cf-92be-921cb4fb30d1",
+    "fcedf5c8-c87e-4656-b31f-e4eeb85bd9a4",
+    "5170c20c-5b2f-4e41-b661-8a08e8e74c42",
+    "f0da9c0f-2d4b-465b-80f7-41bde18e9303",
+    "04892d9c-2ee5-423c-941d-4e76c70e90b4",
+    "19c1b714-8b1a-4b9f-bf25-047c24fb435b",
+    "366e91a8-d4dc-471e-8af2-256511c18ff2",
+    "ecdc5bee-5d0b-4796-b5c2-0b3c8a21774f",
+    "78e0d9ce-4f6b-4db3-8424-11dee61a9765",
+    "113881c0-5b12-4d3a-86c3-78ee0b34af43",
+    "df3d4802-a3c2-4dbe-aeb6-0f9a105155aa",
+    "26d14dac-8927-41bb-851a-1f4796e01159",
+    "2882898b-931d-4b16-aef8-38c4cb8dbb91",
+    "db1e36c6-12ab-4336-893c-c21ae265404d",
+    "d6e6bb9f-b71c-4598-a56f-a0155c920767",
+    "ddd2815b-187d-4920-8eb8-fb66c7f67e00",
+    "9a787c5c-a0df-4d67-a7f3-a21ade32393b",
+    "7f6747ed-8d9b-40c0-b3d0-51bc968e2b97",
+    "62a03c61-b196-4b29-a4dc-7a6a2982af4a"
   ]
 }
