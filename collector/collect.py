@@ -21,6 +21,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 MATCHES_FILE = DATA / "matches.json"
 CONFIG_FILE = DATA / "config.json"
+SCHEMA = 2  # veri biçimi sürümü; eski kayıtlar yeniden çekilir
 SLEEP = 4  # istekler arası bekleme (dakikada 30 istek sınırı)
 
 KEY = os.environ.get("HENRIK_KEY", "").strip()
@@ -124,15 +125,28 @@ def slim(m):
             if (pl.get("player") or {}).get("puuid") == killer:
                 kx, ky = (pl.get("location") or {}).get("x"), (pl.get("location") or {}).get("y")
         wname, wtype = weapon_label(k.get("weapon"))
+        victim = (k.get("victim") or {}).get("puuid")
+        vteam = (k.get("victim") or {}).get("team")
+        nd = None
+        if loc.get("x") is not None:
+            for pl in k.get("player_locations") or []:
+                pp = pl.get("player") or {}
+                if pp.get("team") == vteam and pp.get("puuid") != victim:
+                    l2 = pl.get("location") or {}
+                    if l2.get("x") is None:
+                        continue
+                    d = ((l2["x"] - loc["x"]) ** 2 + (l2["y"] - loc["y"]) ** 2) ** 0.5
+                    nd = d if nd is None or d < nd else nd
         kills.append({
             "r": k.get("round", 0), "t": k.get("time_in_round_in_ms", 0),
             "k": killer, "v": (k.get("victim") or {}).get("puuid"),
             "a": [a.get("puuid") for a in (k.get("assistants") or []) if a.get("puuid")],
             "w": wname, "wt": wtype,
             "x": loc.get("x"), "y": loc.get("y"), "kx": kx, "ky": ky,
+            "nd": round(nd) if nd is not None else None,
         })
     return {
-        "id": md["match_id"], "start": md.get("started_at"), "map": map_name(m),
+        "v": SCHEMA, "id": md["match_id"], "start": md.get("started_at"), "map": map_name(m),
         "completed": max_rw >= 13, "teams": teams, "players": players,
         "rounds": rounds, "kills": kills,
     }
@@ -159,6 +173,7 @@ def main():
     have = {m["id"]: m for m in store.get("matches", [])}
     excluded = set(config.get("exclude_match_ids", []))
     before = len(have)
+    changed = [False]
 
     def add(raw):
         if not accept(raw):
@@ -168,6 +183,17 @@ def main():
             return
         have[mid] = slim(raw)
         print(f"  + {have[mid]['start'][:16]} {have[mid]['map']}")
+
+    # 0) Eski biçimdeki kayıtları ID ile yeniden çek
+    for mid, m in list(have.items()):
+        if m.get("v") == SCHEMA:
+            continue
+        print(f"Yeniden çekiliyor: {mid}")
+        j = get(f"/valorant/v4/match/{REGION}/{mid}")
+        if j and j.get("data") and accept(j["data"]):
+            have[mid] = slim(j["data"])
+            changed[0] = True
+        time.sleep(SLEEP)
 
     # 1) ID ile bilinen eski maçlar
     for mid in config.get("seed_match_ids", []):
@@ -201,7 +227,7 @@ def main():
         time.sleep(SLEEP)
 
     matches = sorted(have.values(), key=lambda m: m["start"] or "")
-    if len(matches) == before and MATCHES_FILE.exists():
+    if len(matches) == before and not changed[0] and MATCHES_FILE.exists():
         print("Yeni maç yok")
         return
     store = {
