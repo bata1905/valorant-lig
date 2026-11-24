@@ -3,7 +3,7 @@
     "Bata1905#1905"
   ],
   "collect_min_games": 2,
-  "league_min_games": 3,
+  "league_min_games": 5,
   "exclude_match_ids": [],
   "seed_match_ids": [
     "b0971eed-57d5-4e92-8555-48189451f064",
