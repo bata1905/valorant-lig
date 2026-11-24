@@ -467,7 +467,9 @@ function vMatch(id) {
 
 // ---------- Takım kurucu ----------
 function vTeams() {
-  const st = (S.ui.tb = S.ui.tb || { sel: new Set(leaguePlayers().slice(0, 10).map((p) => p.puuid)), res: null, pick: 0 });
+  // Varsayılan seçim: son maçta oynayanlar
+  const lastM = S.st.matches[S.st.matches.length - 1];
+  const st = (S.ui.tb = S.ui.tb || { sel: new Set(lastM.players.map((p) => p.p)), res: null, pick: 0 });
   const ps = allPlayers();
   const res = st.sel.size >= 2 ? V.balance([...st.sel], S.st.players, S.st.pairs, 5) : [];
   const r = res[st.pick] || res[0];
