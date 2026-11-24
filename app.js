@@ -76,6 +76,30 @@ async function loadAssets() {
   (weapons || []).forEach((w) => { S.assets.weapons[w.displayName] = { icon: w.killStreamIcon || w.displayIcon, cat: (w.category || '').split('::').pop() }; });
 }
 
+// Aynı kişinin farklı hesaplarını/isimlerini birleştirir. config.json: "aliases": {"EskiIsim": "YeniIsim#TAG"}
+function applyAliases(matches, aliases) {
+  const byName = {}; // isim (küçük harf) -> {p, n, t}
+  matches.forEach((m) => m.players.forEach((p) => {
+    byName[(p.n + '#' + p.t).toLowerCase()] = { p: p.p, n: p.n, t: p.t };
+    byName[p.n.toLowerCase()] = byName[p.n.toLowerCase()] || { p: p.p, n: p.n, t: p.t };
+  }));
+  const map = {};
+  Object.entries(aliases).forEach(([from, to]) => {
+    const a = byName[from.toLowerCase()], b = byName[to.toLowerCase()];
+    if (a && b && a.p !== b.p) map[a.p] = b;
+  });
+  if (!Object.keys(map).length) return;
+  const r = (id) => (map[id] ? map[id].p : id);
+  matches.forEach((m) => {
+    m.players.forEach((p) => { if (map[p.p]) { const b = map[p.p]; p.p = b.p; p.n = b.n; p.t = b.t; } });
+    m.kills.forEach((k) => { k.k = r(k.k); k.v = r(k.v); k.a = (k.a || []).map(r); });
+    m.rounds.forEach((rd) => {
+      rd.ps = r(rd.ps); rd.df = r(rd.df);
+      if (rd.lv) { const lv = {}; Object.entries(rd.lv).forEach(([id, v]) => (lv[r(id)] = v)); rd.lv = lv; }
+    });
+  });
+}
+
 async function init() {
   try {
     const [d, cfg, extra] = await Promise.all([
@@ -87,6 +111,7 @@ async function init() {
     const ids = new Set(d.matches.map((m) => m.id));
     (extra.matches || []).forEach((m) => { if (!ids.has(m.id)) d.matches.push(m); });
     S.data = d; S.cfg = cfg;
+    applyAliases(d.matches, cfg.aliases || {});
   } catch (e) {
     app.innerHTML = '<div class="loading">Veri henüz yok. Toplayıcı ilk kez çalıştığında burada görünecek.</div>';
     return;
