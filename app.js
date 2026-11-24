@@ -196,13 +196,16 @@ function vHome() {
     </section>` : '';
 
   const rows = allPlayers().filter((p) => p.games > 0);
+  // Sadece son gece oynayanların puan değişimi gösterilir
+  const nightDelta = {};
+  lm.forEach((m) => Object.entries(m._ratingDelta || {}).forEach(([id, d]) => (nightDelta[id] = (nightDelta[id] || 0) + d)));
   const lp = leaguePlayers();
   const rankOf = {}; lp.forEach((p, i) => (rankOf[p.puuid] = i + 1));
   const maxImp = Math.max(...rows.map((p) => p.impact || 0), 1);
   const cols = [
     { key: 'rank', label: '#', val: (p) => (rankOf[p.puuid] ? -rankOf[p.puuid] : -999), fmt: (p) => `<span class="rank r${rankOf[p.puuid] || ''}">${rankOf[p.puuid] || '–'}</span>` },
     { key: 'name', label: 'Oyuncu', cls: 'l', val: (p) => p.name, fmt: (p) => pLink(p.puuid, true) + (p.league ? '' : ' <span class="tag">misafir</span>') },
-    { key: 'rating', label: 'Puan', fmt: (p) => { const h = p.ratingHist[p.ratingHist.length - 1]; return `<span class="rating">${f0(p.rating)}</span>${h ? `<span class="delta ${h.d >= 0 ? 'up' : 'down'}">${h.d >= 0 ? '+' : ''}${f0(h.d)}</span>` : ''}`; } },
+    { key: 'rating', label: 'Puan', title: 'Yanındaki küçük sayı: son gece kazandığı/kaybettiği puan (o gece oynamadıysa boş)', fmt: (p) => { const d = nightDelta[p.puuid]; return `<span class="rating">${f0(p.rating)}</span>${d != null ? `<span class="delta ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : ''}${f0(d)}</span>` : ''}`; } },
     { key: 'impact', label: 'Etki', title: 'Maç başına ortalama performans (1.00 = lobi ortalaması)', fmt: (p) => `<span class="imp">${f2(p.impact)}<span class="bar opt"><span style="width:${(100 * (p.impact || 0)) / maxImp}%"></span></span></span>` },
     { key: 'trend', label: 'Gidişat', nosort: true, opt: true, fmt: (p) => spark(p.ratingHist) },
     { key: 'games', label: 'Maç', opt: true },
