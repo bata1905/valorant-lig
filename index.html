@@ -2,28 +2,31 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Valorant Lig</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1923">
+<title>Custom League</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Big+Shoulders+Display:wght@700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
-<header class="top">
-  <a href="#/" class="brand"><span class="brand-mark"></span>CUSTOM<b>LİG</b></a>
+<header class="top"><div class="top-in">
+  <a href="#/" class="brand"><b></b><span id="sitename">Custom League</span></a>
   <nav id="nav">
     <a href="#/" data-r="">Sıralama</a>
-    <a href="#/kafa" data-r="kafa">Kafa Kafaya</a>
+    <a href="#/maclar" data-r="maclar">Maçlar</a>
+    <a href="#/takim" data-r="takim">Takım kur</a>
+    <a href="#/kafa" data-r="kafa">Kafa kafaya</a>
     <a href="#/silahlar" data-r="silahlar">Silahlar</a>
     <a href="#/haritalar" data-r="haritalar">Haritalar</a>
-    <a href="#/maclar" data-r="maclar">Maçlar</a>
-    <a href="#/takim" data-r="takim">Takım Kur</a>
     <a href="#/rekorlar" data-r="rekorlar">Rekorlar</a>
   </nav>
-</header>
-<main id="app"><div class="loading">Yükleniyor…</div></main>
+  <button class="music" id="music" title="Müziği aç/kapat" aria-label="Müziği aç/kapat" hidden>♪</button>
+</div></header>
+<main id="app"><div class="loading">Yükleniyor</div></main>
 <footer class="foot" id="foot"></footer>
-<script src="stats.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="stats.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

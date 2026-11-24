@@ -2,7 +2,8 @@
 (function (root) {
   const START_RATING = 1000;
   const RATING_SCALE = 50; // lobi ortalamasının %10 üstü = +5 puan
-  const WIN_BONUS = 4;
+  const WIN_BONUS = 10; // güçlü takımı yenen ~+8, favori olarak kazanan ~+2
+  const ISO_DIST = 2500; // ~25 metre: en yakın takım arkadaşından bu kadar uzakta ölmek 'yalnız ölüm'
   const TRADE_MS = 5000;
 
   function emptyPlayer(p) {
@@ -83,7 +84,7 @@
         mp.g++; mp.k += p.k; mp.d += p.d; mp.score += p.sc; mp.rounds += roundsTotal;
         const acs = p.sc / roundsTotal;
         m._acs[p.p] = acs;
-        m._extra[p.p] = { fb: 0, fd: 0, kast: 0, k3: 0, k4: 0, aces: 0, clutch: 0 };
+        m._extra[p.p] = { fb: 0, fd: 0, kast: 0, k3: 0, k4: 0, aces: 0, clutch: 0, untraded: 0, iso: 0, critFd: 0, critTxt: null, clutchLost: 0 };
         records.push({ type: 'kills', val: p.k, p: p.p, m: m.id });
         records.push({ type: 'acs', val: acs, p: p.p, m: m.id });
         records.push({ type: 'dmg', val: p.dd, p: p.p, m: m.id });
@@ -115,6 +116,7 @@
       }
 
       // Raund bazlı: ilk kan, KAST, çoklu kill, clutch, eko
+      const runScore = {}; Object.keys(m.teams).forEach((t) => (runScore[t] = 0));
       for (let r = 0; r < roundsTotal; r++) {
         const rk = (byRound[r] || []).slice().sort((a, b) => a.t - b.t);
         const rd = m.rounds[r] || {};
@@ -128,6 +130,13 @@
         if (first) {
           if (P[first.k]) { P[first.k].fb++; m._extra[first.k].fb++; }
           if (P[first.v]) { P[first.v].fd++; m._extra[first.v].fd++; }
+          const sc = Object.values(runScore);
+          const crit = Math.min(...sc) >= 10 || Math.max(...sc) >= 12;
+          if (crit && m._extra[first.v]) {
+            const ex = m._extra[first.v];
+            ex.critFd++;
+            if (!ex.critTxt) { const t = teamOf[first.v], o = Object.keys(runScore).find((x) => x !== t); ex.critTxt = `${runScore[t]}-${runScore[o]}`; }
+          }
         }
         // Trade: ölen oyuncunun katili 5 sn içinde ölen oyuncunun takımı tarafından öldürüldüyse
         const traded = new Set();
@@ -138,6 +147,11 @@
         });
         for (const p of m.players) {
           const kast = killsBy[p.p] || assisted.has(p.p) || !died[p.p] || traded.has(p.p);
+          if (died[p.p]) {
+            const ex = m._extra[p.p];
+            if (!traded.has(p.p)) ex.untraded++;
+            if (died[p.p].nd != null && died[p.p].nd > ISO_DIST) ex.iso++;
+          }
           if (kast) { P[p.p].kastRounds++; m._extra[p.p].kast++; }
           const n = killsBy[p.p] || 0;
           const enemies = Object.keys(teamSize).filter((t) => t !== p.team).reduce((s, t) => s + teamSize[t], 0);
@@ -165,7 +179,9 @@
           if (!P[c.p]) continue;
           P[c.p].clutchAtt++;
           if (rd.w === t) { P[c.p].clutchWon++; m._extra[c.p].clutch++; }
+          else m._extra[c.p].clutchLost++;
         }
+        if (rd.w && runScore[rd.w] != null) runScore[rd.w]++;
         if (rd.ps && P[rd.ps]) P[rd.ps].plants++;
         if (rd.df && P[rd.df]) P[rd.df].defuses++;
         // Eko kill: oyuncunun kıyafet değeri rakibinin yarısından azken aldığı kill
@@ -194,18 +210,64 @@
       const weight = Math.min(1, roundsTotal / 20);
       m._ratingDelta = {};
       m._impact = {};
+      const teamAvg = {};
+      Object.keys(m.teams).forEach((t) => {
+        const ps = m.players.filter((p) => p.team === t);
+        teamAvg[t] = ps.reduce((x, p) => x + P[p.p].rating, 0) / (ps.length || 1);
+      });
+      m._winProb = {};
+      Object.keys(m.teams).forEach((t) => {
+        const o = Object.keys(m.teams).find((x) => x !== t);
+        m._winProb[t] = 1 / (1 + Math.pow(10, ((teamAvg[o] || 1000) - teamAvg[t]) / 400));
+      });
       for (const p of m.players) {
         const s = P[p.p], e = m._extra[p.p];
         const impact = 0.55 * (m._wk[p.p] / avgWk) + 0.25 * (p.dd / roundsTotal / avgAdr)
           + 0.12 * (e.kast / roundsTotal / avgKast) + 0.08 * (1 + (3 * (e.fb - e.fd)) / roundsTotal);
         m._impact[p.p] = impact;
         let delta = RATING_SCALE * (impact - 1);
-        if (m.completed && winner) delta += p.team === winner ? WIN_BONUS : -WIN_BONUS;
+        if (m.completed && winner) delta += WIN_BONUS * ((p.team === winner ? 1 : 0) - m._winProb[p.team]) * 2;
         delta = Math.max(-40, Math.min(40, delta)) * weight;
         s.rating += delta;
         s.impactSum = (s.impactSum || 0) + impact;
         m._ratingDelta[p.p] = delta;
         s.ratingHist.push({ m: m.id, r: s.rating, d: delta, date: m.start });
+      }
+
+      // Maçı satan / taşıyan analizi
+      const per20 = 20 / roundsTotal;
+      const reasonsOf = (p) => {
+        const e = m._extra[p.p], imp = m._impact[p.p];
+        const r = [];
+        if (e.critFd) r.push({ w: 3 * e.critFd, t: `${e.critTxt}'de ilk kanı verdi` });
+        if (e.fd >= 2) r.push({ w: 1.2 * e.fd * per20, t: `${e.fd} raundda ilk ölen oldu` });
+        if (e.iso >= 2) r.push({ w: 1.1 * e.iso * per20, t: `${e.iso} kez takımından uzakta tek başına öldü` });
+        if (e.untraded >= 4) r.push({ w: 0.5 * e.untraded * per20, t: `${e.untraded} ölümünün intikamı alınmadı` });
+        if (e.clutchLost) r.push({ w: 1.5 * e.clutchLost, t: `${e.clutchLost} clutch kaybetti` });
+        if (imp < 0.85) r.push({ w: 12 * (0.85 - imp), t: `lobi ortalamasının %${Math.round((1 - imp) * 100)} altında oynadı` });
+        return r.sort((a, b) => b.w - a.w);
+      };
+      const pool = m.completed && winner ? m.players.filter((p) => p.team !== winner) : m.players;
+      let worst = null;
+      pool.forEach((p) => {
+        const rs = reasonsOf(p);
+        const ts = rs.reduce((x, y) => x + y.w, 0);
+        if (!worst || ts > worst.ts) worst = { p: p.p, ts, reasons: rs.slice(0, 3).map((x) => x.t) };
+      });
+      if (worst && worst.ts > 0) {
+        m._throw = worst;
+        P[worst.p].throws = (P[worst.p].throws || 0) + 1;
+      }
+      const carryPool = m.completed && winner ? m.players.filter((p) => p.team === winner) : m.players;
+      const carry = carryPool.slice().sort((a, b) => m._impact[b.p] - m._impact[a.p])[0];
+      if (carry) {
+        const e = m._extra[carry.p];
+        const bits = [`${carry.k} kill`];
+        if (e.fb >= 3) bits.push(`${e.fb} ilk kan`);
+        if (e.clutch) bits.push(`${e.clutch} clutch`);
+        if (e.aces) bits.push('ace');
+        m._carry = { p: carry.p, impact: m._impact[carry.p], txt: bits.join(', ') };
+        P[carry.p].carries = (P[carry.p].carries || 0) + 1;
       }
 
       // Tamamlanan maçlar: galibiyet, ikili sinerji

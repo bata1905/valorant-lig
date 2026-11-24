@@ -31,7 +31,7 @@ function spark(hist, w = 90, h = 24) {
   const mn = Math.min(...pts), mx = Math.max(...pts), rg = mx - mn || 1;
   const xy = pts.map((v, i) => `${((i / (pts.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - mn) / rg) * (h - 4)).toFixed(1)}`).join(' ');
   const up = pts[pts.length - 1] >= pts[0];
-  return `<svg class="spark" width="${w}" height="${h}"><polyline fill="none" stroke="${up ? '#18e5b0' : '#ff4655'}" stroke-width="1.8" points="${xy}"/></svg>`;
+  return `<svg class="spark" width="${w}" height="${h}"><polyline fill="none" stroke="${up ? '#4fe3b5' : '#ff5c7a'}" stroke-width="1.8" points="${xy}"/></svg>`;
 }
 
 // Sıralanabilir tablo
@@ -45,8 +45,9 @@ function table(id, cols, rows, opt = {}) {
     const xa = x ?? -1e9, yb = y ?? -1e9;
     return st.dir === -1 ? yb - xa : xa - yb;
   });
-  const head = cols.map((c) => `<th class="${c.cls || ''} ${c.nosort ? 'nosort' : ''}" data-k="${c.key}" title="${esc(c.title || '')}">${c.label}${c.key === st.key ? (st.dir === -1 ? ' ▾' : ' ▴') : ''}</th>`).join('');
-  const body = sorted.map((r, i) => `<tr class="${opt.rowCls ? opt.rowCls(r) : ''}" ${opt.href ? `data-href="${opt.href(r)}"` : ''}>${cols.map((c) => `<td class="${c.cls || ''}">${c.fmt ? c.fmt(r, i) : esc(val(r, c))}</td>`).join('')}</tr>`).join('');
+  const cc = (c) => `${c.cls || ''} ${c.opt ? 'opt' : ''}`;
+  const head = cols.map((c) => `<th class="${cc(c)} ${c.nosort ? 'nosort' : ''} ${c.key === st.key ? 'on' : ''}" data-k="${c.key}" title="${esc(c.title || '')}">${c.label}${c.key === st.key && c.key !== 'rank' ? (st.dir === -1 ? ' ↓' : ' ↑') : ''}</th>`).join('');
+  const body = sorted.map((r, i) => `<tr class="${opt.rowCls ? opt.rowCls(r) : ''}" ${opt.href ? `data-href="${opt.href(r)}"` : ''}>${cols.map((c) => `<td class="${cc(c)}">${c.fmt ? c.fmt(r, i) : esc(val(r, c))}</td>`).join('')}</tr>`).join('');
   return `<div class="scroll"><table data-tid="${id}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function wireTables(rerender) {
@@ -89,71 +90,106 @@ async function init() {
   S.st = V.compute(S.data.matches, { minGames: S.cfg.league_min_games || 3 });
   if (!S.st.matches.length) { app.innerHTML = '<div class="loading">Henüz maç yok.</div>'; return; }
   const upd = S.data.meta && S.data.meta.updated;
-  document.getElementById('foot').innerHTML = `${S.st.matches.length} maç · son güncelleme ${upd ? new Date(upd).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) : '–'} · Riot Games ile bağlantılı değildir`;
+  document.getElementById('foot').innerHTML = `${S.st.matches.length} maç. Son güncelleme ${upd ? new Date(upd).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' }) : '–'}. Riot Games ile bağlantısı yoktur.`;
   window.addEventListener('hashchange', route);
+  setupMusic();
   route();
   loadAssets().then(route);
+}
+
+// ---------- müzik ----------
+// config.json içinde "music": "music/nakarat.mp3" varsa ilk dokunuşta çalar.
+function setupMusic() {
+  const src = S.cfg.music;
+  const btn = document.getElementById('music');
+  if (!src || !btn) return;
+  let off = false;
+  try { off = localStorage.getItem('musicOff') === '1'; } catch (e) {}
+  const a = new Audio(src);
+  a.loop = true; a.volume = 0.55;
+  btn.hidden = false;
+  const sync = () => btn.classList.toggle('playing', !a.paused);
+  a.onplay = sync; a.onpause = sync;
+  const start = () => { if (!off && a.paused) a.play().catch(() => {}); };
+  start(); // bazı tarayıcılar izin verirse hemen çalar
+  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => document.addEventListener(ev, start, { once: true, capture: true }));
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    if (a.paused) { off = false; a.play().catch(() => {}); } else { off = true; a.pause(); }
+    try { localStorage.setItem('musicOff', off ? '1' : '0'); } catch (err) {}
+  };
 }
 
 // ---------- yönlendirme ----------
 function route() {
   const h = location.hash.replace(/^#\/?/, '');
   const [r, arg] = h.split('/');
-  document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.r === (r === 'oyuncu' || r === 'mac' ? '' : r || '')));
+  document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.r === (r === 'oyuncu' ? '' : r === 'mac' ? 'maclar' : r || '')));
   const views = { '': vHome, kafa: vH2H, silahlar: vWeapons, haritalar: vMaps, maclar: vMatches, mac: vMatch, oyuncu: vPlayer, takim: vTeams, rekorlar: vRecords };
   (views[r] || vHome)(decodeURIComponent(arg || ''));
 }
 
 // ---------- Sıralama ----------
+function verdictHtml(m) {
+  if (!m) return '';
+  const t = m._throw, c = m._carry;
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  return `<div class="verdict"><span class="ico">🧯</span><div><div class="tagline">Maçı satan: ${t ? pLink(t.p) : 'yok'}</div>
+      <div class="why">${t ? esc(cap(t.reasons.join(', '))) + '.' : 'Herkes elinden geleni yaptı.'}</div></div></div>
+    <div class="verdict"><span class="ico">🎒</span><div><div class="tagline">Sırtlayan: ${c ? pLink(c.p) : '–'}</div>
+      <div class="why">${c ? `${esc(c.txt)}, etki ${f2(c.impact)}.` : ''}</div></div></div>`;
+}
+
 function vHome() {
   const nights = Object.keys(S.st.nights).sort();
   const last = nights[nights.length - 1];
   const lm = S.st.nights[last] || [];
-  // Gecenin özeti
-  const agg = {};
-  lm.forEach((m) => m.players.forEach((p) => {
-    const a = (agg[p.p] = agg[p.p] || { k: 0, d: 0, sc: 0, r: 0, g: 0, w: 0, delta: 0 });
-    a.k += p.k; a.d += p.d; a.sc += p.sc; a.r += m._roundsTotal; a.g++;
-    if (m.completed && m._winner === p.team) a.w++;
-    if (m._ratingDelta && m._ratingDelta[p.p]) a.delta += m._ratingDelta[p.p];
-  }));
-  const ranked = Object.entries(agg).map(([id, a]) => ({ id, ...a, acs: a.sc / a.r })).sort((a, b) => b.acs - a.acs);
-  const mvp = ranked[0], low = ranked[ranked.length - 1];
-  const climber = ranked.slice().sort((a, b) => b.delta - a.delta)[0];
-  const night = last ? `<div class="night">
-      <h3>Son gece · ${esc(nightTR(last))} · ${lm.length} maç</h3>
-      <div class="grid g4">
-        <div class="stat"><span class="l">Gecenin MVP'si</span><span class="v">${pLink(mvp.id)}</span><span class="muted">${f0(mvp.acs)} ACS · ${mvp.k}/${mvp.d}</span></div>
-        <div class="stat"><span class="l">En çok puan kazanan</span><span class="v">${pLink(climber.id)}</span><span class="up">+${f1(climber.delta)} puan</span></div>
-        <div class="stat"><span class="l">Haritalar</span><span class="v" style="font-size:18px">${lm.map((m) => esc(m.map)).join(', ')}</span></div>
-        <div class="stat"><span class="l">Zor gece geçiren</span><span class="v">${pLink(low.id)}</span><span class="muted">${f0(low.acs)} ACS · ${low.k}/${low.d}</span></div>
-      </div></div>` : '';
+  const lastMatch = lm[lm.length - 1];
+  const leader = leaguePlayers()[0];
+  const board = last ? `<section class="board" aria-label="Son gece">
+      <div>
+        <div class="night-title">Son gece, ${esc(nightTR(last))}</div>
+        <div class="results">${lm.map((m) => {
+          const tids = Object.keys(m.teams);
+          return `<a class="res" href="#/mac/${m.id}"><span class="map">${esc(m.map)}</span>
+            <span class="sc">${tids.map((t) => `<span class="team-${t}">${m.teams[t].rw}</span>`).join('<span class="dim">:</span>')}</span>
+            <span class="dim">${m.completed ? '' : 'yarıda kaldı'}</span></a>`;
+        }).join('')}</div>
+      </div>
+      <div class="leader">
+        <span class="muted">Ligin lideri</span>
+        <a href="#/oyuncu/${leader.puuid}" style="font-weight:800;font-size:22px">${esc(leader.name)}</a>
+        <span class="big">${f0(leader.rating)}</span>
+        <span class="muted">${leader.games} maçta etki ${f2(leader.impact)}</span>
+      </div>
+      <div class="verdicts">${verdictHtml(lastMatch)}</div>
+    </section>` : '';
 
   const rows = allPlayers().filter((p) => p.games > 0);
   const lp = leaguePlayers();
   const rankOf = {}; lp.forEach((p, i) => (rankOf[p.puuid] = i + 1));
+  const maxImp = Math.max(...rows.map((p) => p.impact || 0), 1);
   const cols = [
     { key: 'rank', label: '#', val: (p) => (rankOf[p.puuid] ? -rankOf[p.puuid] : -999), fmt: (p) => `<span class="rank r${rankOf[p.puuid] || ''}">${rankOf[p.puuid] || '–'}</span>` },
     { key: 'name', label: 'Oyuncu', cls: 'l', val: (p) => p.name, fmt: (p) => pLink(p.puuid, true) + (p.league ? '' : ' <span class="tag">misafir</span>') },
     { key: 'rating', label: 'Puan', fmt: (p) => { const h = p.ratingHist[p.ratingHist.length - 1]; return `<span class="rating">${f0(p.rating)}</span>${h ? `<span class="delta ${h.d >= 0 ? 'up' : 'down'}">${h.d >= 0 ? '+' : ''}${f0(h.d)}</span>` : ''}`; } },
-    { key: 'trend', label: 'Gidişat', nosort: true, fmt: (p) => spark(p.ratingHist) },
-    { key: 'games', label: 'Maç' },
+    { key: 'impact', label: 'Etki', title: 'Maç başına ortalama performans (1.00 = lobi ortalaması)', fmt: (p) => `<span class="imp">${f2(p.impact)}<span class="bar opt"><span style="width:${(100 * (p.impact || 0)) / maxImp}%"></span></span></span>` },
+    { key: 'trend', label: 'Gidişat', nosort: true, opt: true, fmt: (p) => spark(p.ratingHist) },
+    { key: 'games', label: 'Maç', opt: true },
     { key: 'wl', label: 'G-M', val: (p) => p.wins - p.losses, fmt: (p) => `${p.wins}-${p.losses}` },
-    { key: 'winPct', label: 'Kazanma', fmt: (p) => pct(p.winPct) },
-    { key: 'form', label: 'Form', nosort: true, fmt: (p) => formHtml(p.form) },
-    { key: 'kd', label: 'K/D', fmt: (p) => f2(p.kd) },
-    { key: 'impact', label: 'Etki', title: 'Maç başına ortalama performans (1.00 = lobi ortalaması)', fmt: (p) => f2(p.impact) },
-    { key: 'kpr', label: 'KPR', title: 'Raund başına kill', fmt: (p) => f2(p.kpr) },
-    { key: 'acs', label: 'ACS', title: 'Raund başına ortalama skor', fmt: (p) => f0(p.acs) },
-    { key: 'adr', label: 'ADR', title: 'Raund başına hasar', fmt: (p) => f0(p.adr) },
-    { key: 'hsPct', label: 'HS%', fmt: (p) => pct(p.hsPct) },
-    { key: 'kast', label: 'KAST', title: 'Kill, asist, hayatta kalma veya trade olunan raund yüzdesi', fmt: (p) => pct(p.kast) },
-    { key: 'fb', label: 'İlk Kan' },
-    { key: 'clutchWon', label: 'Clutch' },
+    { key: 'form', label: 'Form', nosort: true, opt: true, fmt: (p) => formHtml(p.form) },
+    { key: 'kd', label: 'K/D', opt: true, fmt: (p) => f2(p.kd) },
+    { key: 'kpr', label: 'KPR', opt: true, title: 'Raund başına kill', fmt: (p) => f2(p.kpr) },
+    { key: 'acs', label: 'ACS', opt: true, title: 'Raund başına ortalama skor', fmt: (p) => f0(p.acs) },
+    { key: 'adr', label: 'ADR', opt: true, title: 'Raund başına hasar', fmt: (p) => f0(p.adr) },
+    { key: 'hsPct', label: 'HS%', opt: true, fmt: (p) => pct(p.hsPct) },
+    { key: 'kast', label: 'KAST', opt: true, title: 'Kill, asist, hayatta kalma veya trade olunan raund yüzdesi', fmt: (p) => pct(p.kast) },
+    { key: 'fb', label: 'İlk kan', opt: true },
+    { key: 'clutchWon', label: 'Clutch', opt: true },
   ];
-  app.innerHTML = `${night}
-    <h1>Lig Sıralaması</h1>
-    <p class="muted">Puan bireysel performansa göre hesaplanır: her maçta lobinin ortalamasına göre kill (en ağırlıklı; güçlü oyuncuyu öldürmek daha değerli, zayıf oyuncuyu öldürmek daha az), hasar, KAST ve ilk kan/ilk ölüm farkına bakılır. Ortalamanın üstünde oynayan puan kazanır. Maçı kazanmak sadece küçük bir bonus (±4) verir, yani kötü takıma düşmek seni fazla cezalandırmaz. Yarıda kalan maçlar oynanan raund kadar sayılır. Sıralamaya girmek için en az ${S.cfg.league_min_games || 3} maç gerekir.</p>
+  app.innerHTML = `${board}
+    <h1>Sıralama</h1>
+    <p class="lead">Puan, her maçta lobinin ortalamasına göre ne kadar iyi oynadığına bakar. Kill en ağırlıklı kısım ve güçlü birini öldürmek daha değerli. Hasar, KAST ve ilk kan da sayılır. Güçlü takımı yenmek iyi bonus getirir, favoriyken kazanmak az. Sıralamaya girmek için ${S.cfg.league_min_games || 3} maç gerekir.</p>
     <div class="card tight" id="tbl">${table('lb', cols, rows, { sort: 'rank', rowCls: (p) => (p.league ? '' : 'guest'), href: (p) => '#/oyuncu/' + p.puuid })}</div>`;
   wireTables(vHome);
 }
@@ -179,12 +215,12 @@ function vPlayer(id) {
     <div class="hero">
       ${p.favAgent && S.assets.agents[p.favAgent] ? `<img src="${S.assets.agents[p.favAgent].icon}">` : ''}
       <div><h1 style="margin:0">${esc(p.name)} <span class="tag">#${esc(p.tag)}</span></h1>
-      <div class="muted">${rank ? rank + '. sırada' : 'Misafir oyuncu'} · ${p.games} maç · ${formHtml(p.form)}</div></div>
+      <div class="muted">${rank ? rank + '. sırada' : 'Misafir oyuncu'}, ${p.games} maç ${formHtml(p.form)}</div></div>
       <div style="margin-left:auto;text-align:right"><div class="big">${f0(p.rating)}</div><div class="muted">lig puanı</div></div>
     </div>
     <div class="card" style="margin-bottom:16px"><h3>Puan gidişatı</h3>${ratingChart(p)}</div>
     <div class="grid g4">
-      ${[['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K · 4K · Ace', `${p.k3} · ${p.k4} · ${p.aces}`], ['Eko kill', p.ecoKills]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
+      ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
     </div>
     ${badges.length ? `<div class="section"><h2>Rozetler</h2>${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</div>` : ''}
     <div class="grid g2 section">
@@ -234,10 +270,10 @@ function ratingChart(p) {
   const line = pts.map((x, i) => `${X(i).toFixed(1)},${Y(x.r).toFixed(1)}`).join(' ');
   const base = Y(V.START_RATING);
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
-    <line x1="${pad}" x2="${W - pad}" y1="${base}" y2="${base}" stroke="#2a3b4b" stroke-dasharray="4 4"/>
+    <line x1="${pad}" x2="${W - pad}" y1="${base}" y2="${base}" stroke="#3a2f66" stroke-dasharray="4 4"/>
     <text x="${pad}" y="${base - 4}" fill="#8b9aa8" font-size="10">${V.START_RATING}</text>
-    <polyline fill="none" stroke="#ff4655" stroke-width="2.5" points="${line}"/>
-    ${pts.map((x, i) => (i ? `<circle cx="${X(i)}" cy="${Y(x.r)}" r="3.5" fill="${x.d >= 0 ? '#18e5b0' : '#ff4655'}"><title>${dateTR(x.date)} · ${f0(x.r)} (${x.d >= 0 ? '+' : ''}${f1(x.d)})</title></circle>` : '')).join('')}
+    <polyline fill="none" stroke="#ffb238" stroke-width="2.5" points="${line}"/>
+    ${pts.map((x, i) => (i ? `<circle cx="${X(i)}" cy="${Y(x.r)}" r="3.5" fill="${x.d >= 0 ? '#4fe3b5' : '#ff5c7a'}"><title>${dateTR(x.date)}: ${f0(x.r)} (${x.d >= 0 ? '+' : ''}${f1(x.d)})</title></circle>` : '')).join('')}
   </svg>`;
 }
 
@@ -280,7 +316,7 @@ function heatBlock(key, fixed) {
       <select data-h="mode"><option value="both" ${st.mode === 'both' ? 'selected' : ''}>Kill + ölüm</option><option value="deaths" ${st.mode === 'deaths' ? 'selected' : ''}>Sadece ölümler</option><option value="kills" ${st.mode === 'kills' ? 'selected' : ''}>Sadece kill pozisyonları</option></select>
     </div>
     <div class="heat" id="heat-${key}"></div>
-    <div class="legend"><span><i style="background:#18e5b0"></i>Kill alınan pozisyon</span><span><i style="background:#ff4655"></i>Ölünen yer</span></div></div>`;
+    <div class="legend"><span><i style="background:#4fe3b5"></i>Kill alınan pozisyon</span><span><i style="background:#ff5c7a"></i>Ölünen yer</span></div></div>`;
 }
 function wireHeat(key, fixed) {
   const st = S.ui[key];
@@ -301,8 +337,8 @@ function drawHeat(key, fixed) {
     const who = fixed.player || st.player;
     const pts = [];
     S.st.matches.filter((m) => m.map === st.map).forEach((m) => m.kills.forEach((k) => {
-      if (st.mode !== 'kills' && k.x != null && (!who || k.v === who)) pts.push([k.x, k.y, '255,70,85']);
-      if (st.mode !== 'deaths' && k.kx != null && (!who || k.k === who)) pts.push([k.kx, k.ky, '24,229,176']);
+      if (st.mode !== 'kills' && k.x != null && (!who || k.v === who)) pts.push([k.x, k.y, '255,92,122']);
+      if (st.mode !== 'deaths' && k.kx != null && (!who || k.k === who)) pts.push([k.kx, k.ky, '79,227,181']);
     }));
     ctx.globalCompositeOperation = 'lighter';
     pts.forEach(([gx, gy, c]) => {
@@ -338,7 +374,7 @@ function vH2H() {
     const n = x ? x.n : 0;
     const alpha = n ? 0.12 + 0.75 * (n / max) : 0;
     const sel = st.sel === a + '>' + b ? 'sel' : '';
-    return `<td class="${sel}" data-c="${a}>${b}" style="background:rgba(255,70,85,${alpha})">${n || '<span class="muted">·</span>'}</td>`;
+    return `<td class="${sel}" data-c="${a}>${b}" style="background:rgba(255,178,56,${alpha})">${n || '<span class="muted">·</span>'}</td>`;
   };
   let detail = '';
   if (st.sel) {
@@ -349,15 +385,15 @@ function vH2H() {
       <table><thead><tr><th class="l nosort">Silah</th><th class="nosort">${esc(nm(a))} → ${esc(nm(b))}</th><th class="nosort">${esc(nm(b))} → ${esc(nm(a))}</th></tr></thead>
       <tbody>${ws.map((w) => `<tr><td class="l">${weaponName(w)}</td><td>${ab.w[w] || 0}</td><td>${ba.w[w] || 0}</td></tr>`).join('')}</tbody></table></div>`;
   }
-  app.innerHTML = `<h1>Kafa Kafaya</h1>
-    <p class="muted">Satırdaki oyuncunun sütundaki oyuncuyu kaç kez öldürdüğü. Bir hücreye tıklayınca iki oyuncunun birbirine karşı silah dökümü açılır.</p>
+  app.innerHTML = `<h1>Kafa kafaya</h1>
+    <p class="lead">Satırdaki oyuncu, sütundaki oyuncuyu kaç kez öldürdü. Bir hücreye dokun, ikisinin birbirine karşı silah dökümü açılsın.</p>
     <div class="filters">
       <select id="fw"><option value="">Tüm silahlar</option>${weapons.map((w) => `<option ${w === st.weapon ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
       <select id="fm"><option value="">Tüm haritalar</option>${maps.map((m) => `<option ${m === st.map ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
-      <label class="muted"><input type="checkbox" id="fa" ${st.all ? 'checked' : ''}> Misafirleri de göster</label>
+      <label class="chk"><input type="checkbox" id="fa" ${st.all ? 'checked' : ''}> Misafirleri de göster</label>
     </div>
     <div class="card scroll"><table class="matrix"><thead><tr><th class="nosort">Öldüren ↓ / Ölen →</th>${ps.map((p) => `<th class="nosort" title="${esc(p.name)}">${esc(p.name.slice(0, 9))}</th>`).join('')}<th class="nosort">Toplam</th></tr></thead>
-    <tbody>${ps.map((a) => `<tr><th class="l nosort" style="text-align:left">${esc(a.name)}</th>${ps.map((b) => cell(a.puuid, b.puuid)).join('')}<td><b>${ps.reduce((s, b) => s + ((M[a.puuid + '>' + b.puuid] || {}).n || 0), 0)}</b></td></tr>`).join('')}</tbody></table></div>
+    <tbody>${ps.map((a) => `<tr><th class="rowh nosort">${esc(a.name)}</th>${ps.map((b) => cell(a.puuid, b.puuid)).join('')}<td><b>${ps.reduce((s, b) => s + ((M[a.puuid + '>' + b.puuid] || {}).n || 0), 0)}</b></td></tr>`).join('')}</tbody></table></div>
     ${detail}`;
   document.getElementById('fw').onchange = (e) => { st.weapon = e.target.value; vH2H(); };
   document.getElementById('fm').onchange = (e) => { st.map = e.target.value; vH2H(); };
@@ -387,7 +423,7 @@ function vWeapons() {
     <div class="card tight">${table('wt', cols, rows, { sort: 'kills' })}</div>
     <h2 class="section">Oyuncu × silah (kill payı)</h2>
     <div class="card scroll"><table><thead><tr><th class="l nosort">Oyuncu</th>${topW.map((w) => `<th class="nosort">${esc(w)}</th>`).join('')}</tr></thead><tbody>
-    ${ps.map((p) => `<tr><td class="l">${pLink(p.puuid)}</td>${topW.map((w) => { const k = p.weapons[w] || 0, s = (100 * k) / Math.max(1, p.kills); return `<td style="background:rgba(255,70,85,${(s / 100) * 1.4})">${k ? pct(s) : '<span class="muted">·</span>'}</td>`; }).join('')}</tr>`).join('')}
+    ${ps.map((p) => `<tr><td class="l">${pLink(p.puuid)}</td>${topW.map((w) => { const k = p.weapons[w] || 0, s = (100 * k) / Math.max(1, p.kills); return `<td style="background:rgba(255,178,56,${(s / 100) * 1.4})">${k ? pct(s) : '<span class="muted">·</span>'}</td>`; }).join('')}</tr>`).join('')}
     </tbody></table></div>`;
   document.getElementById('wpp').onchange = (e) => { st.player = e.target.value; vWeapons(); };
   wireTables(vWeapons);
@@ -406,7 +442,7 @@ function vMaps() {
       const a = S.assets.maps[m], b = best(m);
       return `<div class="card tight"><div style="height:90px;background:#1c2b39 url('${a ? a.splash : ''}') center/cover"></div>
       <div style="padding:12px 14px"><h2 style="margin:0">${esc(m)}</h2>
-      <div class="muted">${x.games} maç · ${x.kills} kill</div>
+      <div class="muted">${x.games} maç, ${x.kills} kill</div>
       ${b ? `<div style="margin-top:8px">En iyi: ${pLink(b.p)} <span class="muted">${f0(b.acs)} ACS</span></div>` : ''}</div></div>`;
     }).join('')}</div>
     <h2 class="section">Isı haritası</h2>
@@ -425,8 +461,9 @@ function matchCard(m, focus) {
   return `<a class="card tight mcard" href="#/mac/${m.id}">
     <div class="mimg" style="background-image:url('${a ? a.splash : ''}')"><span>${esc(m.map)}</span></div>
     <div class="mbody"><div style="display:flex;justify-content:space-between"><span class="score">${score}</span><span>${res}</span></div>
-    <div class="muted">${dateTR(m.start)} ${timeTR(m.start)} · ${m.players.length / 2}v${m.players.length / 2}</div>
-    ${me ? `<div>${me.ag ? esc(me.ag) + ' · ' : ''}${me.k}/${me.d}/${me.a} · ${f0(m._acs[me.p])} ACS</div>` : ''}</div></a>`;
+    <div class="muted">${dateTR(m.start)}, ${timeTR(m.start)}, ${m.players.length / 2}v${m.players.length / 2}</div>
+    ${me ? `<div>${me.ag ? esc(me.ag) + ', ' : ''}${me.k}/${me.d}/${me.a}, etki ${f2(m._impact[me.p])}</div>` : ''}
+    ${m._throw ? `<div class="sell">Satan: <b>${esc(nm(m._throw.p))}</b></div>` : ''}</div></a>`;
 }
 function vMatches() {
   const nights = Object.keys(S.st.nights).sort().reverse();
@@ -439,28 +476,30 @@ function vMatch(id) {
   const tids = Object.keys(m.teams).sort((a) => (a === 'Red' ? -1 : 1));
   const board = (t) => {
     const rows = m.players.filter((p) => p.team === t).map((p) => ({ ...p, acs: m._acs[p.p], e: m._extra[p.p], hsp: (100 * p.hs) / Math.max(1, p.hs + p.bs + p.ls), dl: m._ratingDelta ? m._ratingDelta[p.p] : null }));
-    return `<div class="card tight"><div style="padding:12px 16px 0"><h2 class="team-${t}">${t === 'Red' ? 'Kırmızı' : 'Mavi'} · ${m.teams[t].rw} ${m.completed ? (m._winner === t ? '<span class="tag">KAZANDI</span>' : '') : ''}</h2></div>
+    return `<div class="card tight"><div style="padding:12px 16px 0"><h2 class="team-${t}">${t === 'Red' ? 'Kırmızı' : 'Mavi'} ${m.teams[t].rw} ${m.completed ? (m._winner === t ? '<span class="tag">kazandı</span>' : '') : ''} <span class="tag">maç öncesi şans %${Math.round((m._winProb[t] || 0.5) * 100)}</span></h2></div>
       ${table('mb' + t + id, [
         { key: 'n', label: 'Oyuncu', cls: 'l', fmt: (r) => `<span class="pname">${agentImg(r.ag)}<a href="#/oyuncu/${r.p}">${esc(r.n)}</a></span>` },
-        { key: 'acs', label: 'ACS', fmt: (r) => f0(r.acs) },
+        { key: 'imp', label: 'Etki', val: (r) => m._impact[r.p], fmt: (r) => f2(m._impact[r.p]) },
+        { key: 'acs', label: 'ACS', opt: true, fmt: (r) => f0(r.acs) },
         { key: 'k', label: 'K' }, { key: 'd', label: 'D' }, { key: 'a', label: 'A' },
-        { key: 'dd', label: 'Hasar' }, { key: 'hsp', label: 'HS%', fmt: (r) => pct(r.hsp) },
-        { key: 'fb', label: 'İK', val: (r) => r.e.fb, fmt: (r) => r.e.fb },
+        { key: 'dd', label: 'Hasar', opt: true }, { key: 'hsp', label: 'HS%', opt: true, fmt: (r) => pct(r.hsp) },
+        { key: 'fb', label: 'İK', opt: true, title: 'İlk kan', val: (r) => r.e.fb, fmt: (r) => r.e.fb },
         { key: 'dl', label: 'Puan', fmt: (r) => (r.dl == null ? '–' : `<span class="${r.dl >= 0 ? 'up' : 'down'}">${r.dl >= 0 ? '+' : ''}${f1(r.dl)}</span>`) },
-      ], rows, { sort: 'acs' })}</div>`;
+      ], rows, { sort: 'imp' })}</div>`;
   };
   const team = {}; m.players.forEach((p) => (team[p.p] = p.team));
   const feedRounds = st.round == null ? [...Array(m._roundsTotal).keys()] : [st.round];
   const feed = feedRounds.map((r) => {
     const ks = m.kills.filter((k) => k.r === r).sort((a, b) => a.t - b.t);
     const rd = m.rounds[r] || {};
-    return `<div style="margin-top:10px"><b>Raund ${r + 1}</b> <span class="muted">· ${rd.w ? (rd.w === 'Red' ? 'Kırmızı' : 'Mavi') : ''} ${esc(rd.res || '')}</span></div>` +
+    return `<div style="margin-top:10px"><b>Raund ${r + 1}</b> <span class="muted">${rd.w ? (rd.w === 'Red' ? 'Kırmızı kazandı' : 'Mavi kazandı') : ''}${rd.res ? ', ' + esc(rd.res) : ''}</span></div>` +
       ks.map((k) => `<div><span class="w">${(k.t / 1000).toFixed(0)}sn</span><span class="team-${team[k.k]}">${esc(nm(k.k))}</span><span class="muted">[${esc(k.w)}]</span><span class="team-${team[k.v]}">${esc(nm(k.v))}</span></div>`).join('');
   }).join('');
-  app.innerHTML = `<div class="hero"><div><h1 style="margin:0">${esc(m.map)}</h1><div class="muted">${dateTR(m.start)} ${timeTR(m.start)} · ${m.completed ? 'Tamamlandı' : 'Yarıda kaldı (puanı etkilemez)'}</div></div>
+  app.innerHTML = `<div class="hero"><div><h1 style="margin:0">${esc(m.map)}</h1><div class="muted">${dateTR(m.start)}, ${timeTR(m.start)}${m.completed ? '' : ', yarıda kaldı (raund oranında sayılır)'}</div></div>
       <div style="margin-left:auto" class="big">${tids.map((t) => `<span class="team-${t}">${m.teams[t].rw}</span>`).join(' : ')}</div></div>
+    <div class="board" style="grid-template-columns:1fr;margin-bottom:18px"><div class="verdicts" style="border-top:none">${verdictHtml(m)}</div></div>
     <div class="grid g2">${tids.map(board).join('')}</div>
-    <div class="card section"><h3>Raundlar (tıkla: o raundun kill akışı)</h3>
+    <div class="card section"><h3>Raundlar. Birine dokun, o raundun kill akışı açılsın.</h3>
       <div class="roundstrip">${[...Array(m._roundsTotal).keys()].map((r) => `<i class="${(m.rounds[r] || {}).w || ''} ${st.round === r ? 'sel' : ''}" data-r="${r}">${r + 1}</i>`).join('')}</div>
       <div class="feed">${feed}</div></div>`;
   app.querySelectorAll('.roundstrip i').forEach((i) => (i.onclick = () => { const r = +i.dataset.r; st.round = st.round === r ? null : r; vMatch(id); }));
@@ -475,18 +514,18 @@ function vTeams() {
   const ps = allPlayers();
   const res = st.sel.size >= 2 ? V.balance([...st.sel], S.st.players, S.st.pairs, 5) : [];
   const r = res[st.pick] || res[0];
-  const li = (id) => `<li>${pLink(id, true)} <span class="muted">${f0(P(id).rating)}</span></li>`;
-  app.innerHTML = `<h1>Takım Kur</h1>
-    <p class="muted">Bu gece kimler var? Seç, sistem lig puanlarına ve kimin kiminle birlikte daha çok kazandığına bakarak en dengeli takımları önersin.</p>
+  const li = (id) => `<li>${pLink(id, true)} <span class="num muted">${f0(P(id).rating)}</span></li>`;
+  app.innerHTML = `<h1>Takım kur</h1>
+    <p class="lead">Bu gece gelenleri seç. Site puanlara ve kimin kiminle birlikte daha çok kazandığına bakıp en dengeli takımları önerir.</p>
     <div class="card"><div class="picker">${ps.map((p) => `<label class="${st.sel.has(p.puuid) ? 'on' : ''}"><input type="checkbox" data-p="${p.puuid}" ${st.sel.has(p.puuid) ? 'checked' : ''}>${esc(p.name)} <span class="muted">${f0(p.rating)}</span></label>`).join('')}</div>
     <div class="muted" style="margin-top:10px">${st.sel.size} oyuncu seçili</div></div>
     ${r ? `<div class="card section">
-      <div class="filters">${res.map((x, i) => `<button data-i="${i}" class="${i === st.pick ? 'primary' : ''}">Seçenek ${i + 1} · %${Math.round(x.prob * 100)}-%${Math.round((1 - x.prob) * 100)}</button>`).join('')}</div>
+      <div class="filters">${res.map((x, i) => `<button data-i="${i}" class="${i === st.pick ? 'primary' : ''}">Seçenek ${i + 1}: %${Math.round(x.prob * 100)}-%${Math.round((1 - x.prob) * 100)}</button>`).join('')}</div>
       <div class="split"><div><h2 class="team-Red">Takım A</h2><ul>${r.A.map(li).join('')}</ul><div class="muted">Ort. ${f0(r.ra)}</div></div>
         <div class="vs">VS</div>
         <div><h2 class="team-Blue">Takım B</h2><ul>${r.B.map(li).join('')}</ul><div class="muted">Ort. ${f0(r.rb)}</div></div></div>
       <div class="probbar"><span style="width:${r.prob * 100}%"></span><span style="width:${(1 - r.prob) * 100}%"></span></div>
-      <div class="muted" style="margin-top:6px">Tahmini kazanma şansı: A %${Math.round(r.prob * 100)} · B %${Math.round((1 - r.prob) * 100)}</div>
+      <div class="muted" style="margin-top:6px">Tahmini kazanma şansı: A %${Math.round(r.prob * 100)}, B %${Math.round((1 - r.prob) * 100)}</div>
     </div>` : ''}`;
   app.querySelectorAll('[data-p]').forEach((c) => (c.onchange = () => { c.checked ? st.sel.add(c.dataset.p) : st.sel.delete(c.dataset.p); st.pick = 0; vTeams(); }));
   app.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => { st.pick = +b.dataset.i; vTeams(); }));
@@ -499,12 +538,12 @@ function vRecords() {
     let list = R.filter((r) => r.type === type && r.val > 0).sort((a, b) => b.val - a.val);
     if (type === 'streak') { const seen = new Set(); list = list.filter((r) => !seen.has(r.p) && seen.add(r.p)); }
     list = list.slice(0, n);
-    return `<div class="card"><h3>${label}</h3>${list.map((r, i) => { const m = matchById(r.m); return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,59,75,.5)"><span><span class="rank r${i + 1}" style="font-size:14px">${i + 1}</span> ${pLink(r.p)}</span><span><b>${fmt(r.val)}</b> <a class="muted" href="#/mac/${r.m}">${esc(m.map)} · ${dateTR(m.start)}</a></span></div>`; }).join('') || '<span class="muted">–</span>'}</div>`;
+    return `<div class="card"><h3>${label}</h3>${list.map((r, i) => { const m = matchById(r.m); return `<div class="rec-row"><span><span class="rank r${i + 1}" style="font-size:16px;width:24px">${i + 1}</span> ${pLink(r.p)}</span><span><b>${fmt(r.val)}</b> <a class="muted" href="#/mac/${r.m}">${esc(m.map)}, ${dateTR(m.start)}</a></span></div>`; }).join('') || '<span class="muted">–</span>'}</div>`;
   };
   const L = leaguePlayers();
   const career = (label, fn, fmt = f0) => {
     const list = L.slice().sort((a, b) => fn(b) - fn(a)).slice(0, 5);
-    return `<div class="card"><h3>${label}</h3>${list.map((p, i) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,59,75,.5)"><span><span class="rank r${i + 1}" style="font-size:14px">${i + 1}</span> ${pLink(p.puuid)}</span><b>${fmt(fn(p))}</b></div>`).join('')}</div>`;
+    return `<div class="card"><h3>${label}</h3>${list.map((p, i) => `<div class="rec-row"><span><span class="rank r${i + 1}" style="font-size:16px;width:24px">${i + 1}</span> ${pLink(p.puuid)}</span><b>${fmt(fn(p))}</b></div>`).join('')}</div>`;
   };
   app.innerHTML = `<h1>Rekorlar</h1>
     <h2 class="section">Tek maçta</h2>
@@ -512,7 +551,8 @@ function vRecords() {
     <h2 class="section">Kariyer</h2>
     <div class="grid g3">
       ${career('Toplam kill', (p) => p.kills)}${career('Ace', (p) => p.aces)}${career('Clutch kazanılan', (p) => p.clutchWon)}
-      ${career('İlk kan', (p) => p.fb)}${career('Eko kill', (p) => p.ecoKills)}${career('Spike kuran', (p) => p.plants)}
+      ${career('Takımı sırtlayan', (p) => p.carries || 0)}${career('Maçı satan', (p) => p.throws || 0)}${career('İlk kan', (p) => p.fb)}
+      ${career('Eko kill', (p) => p.ecoKills)}${career('Spike kuran', (p) => p.plants)}
       ${career('Operator kill', (p) => p.weapons.Operator || 0)}${career('Sheriff kill', (p) => p.weapons.Sheriff || 0)}${career('Bıçak kill', (p) => p.weapons['Bıçak'] || 0)}
     </div>`;
 }
