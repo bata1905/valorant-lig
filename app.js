@@ -671,6 +671,28 @@ function probBar(prob) {
     <div class="muted" style="margin-top:6px">Kazanma şansı: A %${Math.round(prob * 100)}, B %${Math.round((1 - prob) * 100)}</div>`;
 }
 
+// Modelin geçmiş maçlardaki isabeti: her maç için sadece ondan önceki maçlarla tahmin yapılır.
+function modelAccuracy() {
+  if (S._acc) return S._acc;
+  const all = S.data.matches.slice().sort((a, b) => (a.start < b.start ? -1 : 1));
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  let ok = 0, n = 0;
+  for (let i = 8; i < all.length; i++) {
+    const mm = clone(all[i]);
+    V.compute([mm], { minGames: 1 });
+    if (!mm.completed || !mm._winner) continue;
+    const st = V.compute(clone(all.slice(0, i)), { minGames: 1 });
+    const tids = Object.keys(mm.teams);
+    const A = mm.players.filter((p) => p.team === tids[0]).map((p) => p.p);
+    const B = mm.players.filter((p) => p.team === tids[1]).map((p) => p.p);
+    const pr = V.matchup(st.players, st.pairs, A, B).prob;
+    if ((pr > 0.5) === (mm._winner === tids[0])) ok++;
+    n++;
+  }
+  S._acc = { ok, n };
+  return S._acc;
+}
+
 function vTeams() {
   const lastM = S.st.matches[S.st.matches.length - 1];
   const st = (S.ui.tb = S.ui.tb || { sel: new Set(lastM.players.map((p) => p.p)), pick: 0, mode: 'auto', rules: [], draft: null });
@@ -702,9 +724,9 @@ function vTeams() {
       </div>
       ${r ? `<div class="card section">
         <div class="filters">${res.map((x, i) => `<button data-i="${i}" class="${i === st.pick ? 'primary' : ''}">Seçenek ${i + 1}: %${Math.round(x.prob * 100)}-%${Math.round((1 - x.prob) * 100)}</button>`).join('')}</div>
-        <div class="split"><div><h2 class="team-Red">Takım A</h2>${teamList(r.A)}<div class="muted">Ortalama güç ${f0(r.ra)}</div></div>
+        <div class="split"><div><h2 class="team-Red">Takım A</h2>${teamList(r.A)}<div class="muted">Takım gücü ${f0(r.pa)}</div></div>
           <div class="vs">VS</div>
-          <div><h2 class="team-Blue">Takım B</h2>${teamList(r.B)}<div class="muted">Ortalama güç ${f0(r.rb)}</div></div></div>
+          <div><h2 class="team-Blue">Takım B</h2>${teamList(r.B)}<div class="muted">Takım gücü ${f0(r.pb)}</div></div></div>
         ${probBar(r.prob)}
       </div>` : `<div class="card section muted">${sel.length < 2 ? 'En az 2 oyuncu seç.' : 'Bu kurallarla takım kurulamıyor. Bir kuralı sil.'}</div>`}`;
   } else {
@@ -764,9 +786,16 @@ function vTeams() {
   }
 
   app.innerHTML = `<h1>Takım kur</h1>
-    <p class="lead">Bu gece gelenleri seç. Takımlar oyuncuların maç başına gerçek gücüne ve kimin kiminle daha çok kazandığına göre dengelenir.</p>
+    <p class="lead">Bu gece gelenleri seç. Takımlar oyuncuların maç başına gerçek gücüne göre dengelenir. İyi oyuncuların takımı daha çok taşıdığı da hesaba katılır, yani bir yıldız ve bir zayıf oyuncu, iki ortalama oyuncuya eşit sayılmaz.</p>
+    <p class="muted" id="acc" style="margin-top:-8px"></p>
     ${picker}${modeBar}${body}`;
 
+  setTimeout(() => {
+    const el = document.getElementById('acc');
+    if (!el) return;
+    const a = modelAccuracy();
+    if (a.n >= 10 && a.ok / a.n >= 0.55) el.textContent = `Doğruluk testi: bu model geçmiş ${a.n} maçın ${a.ok} tanesinde (%${Math.round((100 * a.ok) / a.n)}) kazananı maçtan önce doğru tahmin etti.`;
+  }, 50);
   const rerender = () => vTeams();
   app.querySelectorAll('[data-p]').forEach((c) => (c.onchange = () => { c.checked ? st.sel.add(c.dataset.p) : st.sel.delete(c.dataset.p); st.pick = 0; st.draft = null; rerender(); }));
   app.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => { st.pick = +b.dataset.i; rerender(); }));

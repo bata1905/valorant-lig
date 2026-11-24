@@ -381,21 +381,27 @@
   }
 
   // Oyuncunun gerçek gücü: maç başına Etki'den türetilir (birikmiş puan değil).
-  // 1.00 etki = 1000; her 0.10 etki = 50 güç. 2 maçtan az oynayan 1000 sayılır.
+  // 1.00 etki = 1000; her 0.10 etki = 50 güç. Az maçı olanın etkisi ortalamaya çekilir.
   function strength(P, id) {
     const p = P[id];
-    if (!p || p.games < 2 || !p.impact) return START_RATING;
-    return START_RATING + 500 * (p.impact - 1);
+    if (!p || !p.games || !p.impact) return START_RATING;
+    const imp = (p.impact * p.games + 1 * 2) / (p.games + 2);
+    return START_RATING + 500 * (imp - 1);
   }
+  // Takım gücü: düz ortalama değil, iyi oyunculara daha çok ağırlık veren "yumuşak maksimum".
+  // Geçmiş maçlarla test edildi: tek bir yıldız oyuncu takımı ortalamanın gösterdiğinden fazla taşıyor.
+  // (Eski "kimin kiminle kazandığı" sinerjisi testte tahmini bozduğu için çıkarıldı.)
+  const STAR_T = 150, PROB_SCALE = 300;
   function teamPower(P, pairs, t) {
-    let syn = 0;
-    for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) syn += synergy(pairs, t[i], t[j]);
-    const avg = t.reduce((x, id) => x + strength(P, id), 0) / (t.length || 1);
-    return { avg, syn, power: avg + syn * 100 };
+    const ss = t.map((id) => strength(P, id));
+    const avg = ss.reduce((a, b) => a + b, 0) / (ss.length || 1);
+    const soft = START_RATING + STAR_T * Math.log(ss.reduce((a, x) => a + Math.exp((x - START_RATING) / STAR_T), 0) / (ss.length || 1));
+    return { avg, power: soft };
   }
   function matchup(P, pairs, A, B) {
     const a = teamPower(P, pairs, A), b = teamPower(P, pairs, B);
-    return { ra: a.avg, rb: b.avg, sa: a.syn, sb: b.syn, prob: winProb(a.power, b.power) };
+    const prob = 1 / (1 + Math.pow(10, (b.power - a.power) / PROB_SCALE));
+    return { ra: a.avg, rb: b.avg, pa: a.power, pb: b.power, prob };
   }
 
   // Dengeli takımlar: tüm bölünmeleri dener, kurallara (birlikte/ayrı) uymayanları atar,
