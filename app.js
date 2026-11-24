@@ -220,7 +220,7 @@ function vPlayer(id) {
     </div>
     <div class="card" style="margin-bottom:16px"><h3>Puan gidişatı</h3>${ratingChart(p)}</div>
     <div class="grid g4">
-      ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
+      ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Pusu kill', p.ambush || 0], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
     </div>
     ${badges.length ? `<div class="section"><h2>Rozetler</h2>${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</div>` : ''}
     <div class="grid g2 section">
@@ -292,6 +292,7 @@ function playerBadges(p) {
   add(top((x) => x.weapons.Operator || 0).puuid === p.puuid && (p.weapons.Operator || 0) > 0, '🔭 Op\'çu');
   add(top((x) => x.weapons.Sheriff || 0).puuid === p.puuid && (p.weapons.Sheriff || 0) > 0, '🤠 Şerif');
   add(top((x) => x.adr).puuid === p.puuid, '💥 Hasar makinesi');
+  add(top((x) => x.ambush || 0).puuid === p.puuid && (p.ambush || 0) > 0, `🐀 Fare (en çok pusu kill: ${p.ambush})`);
   add(p.aces > 0, `🃏 Ace × ${p.aces}`);
   add(p.bestWinStreak >= 3, `🔥 ${p.bestWinStreak} maçlık galibiyet serisi`);
   add(p.streak <= -3, `🥶 ${-p.streak} maçtır kazanamıyor`);
@@ -493,7 +494,7 @@ function vMatch(id) {
     const ks = m.kills.filter((k) => k.r === r).sort((a, b) => a.t - b.t);
     const rd = m.rounds[r] || {};
     return `<div style="margin-top:10px"><b>Raund ${r + 1}</b> <span class="muted">${rd.w ? (rd.w === 'Red' ? 'Kırmızı kazandı' : 'Mavi kazandı') : ''}${rd.res ? ', ' + esc(rd.res) : ''}</span></div>` +
-      ks.map((k) => `<div><span class="w">${(k.t / 1000).toFixed(0)}sn</span><span class="team-${team[k.k]}">${esc(nm(k.k))}</span><span class="muted">[${esc(k.w)}]</span><span class="team-${team[k.v]}">${esc(nm(k.v))}</span></div>`).join('');
+      ks.map((k) => `<div><span class="w">${(k.t / 1000).toFixed(0)}sn</span><span class="team-${team[k.k]}">${esc(nm(k.k))}</span><span class="muted">[${esc(k.w)}]${k._ambush ? ' 🐀' : ''}</span><span class="team-${team[k.v]}">${esc(nm(k.v))}</span></div>`).join('');
   }).join('');
   app.innerHTML = `<div class="hero"><div><h1 style="margin:0">${esc(m.map)}</h1><div class="muted">${dateTR(m.start)}, ${timeTR(m.start)}${m.ff ? ', FF ile bitti (oynanan raund oranında sayılır)' : m.completed ? '' : ', yarıda kaldı (raund oranında sayılır)'}</div></div>
       <div style="margin-left:auto" class="big">${tids.map((t) => `<span class="team-${t}">${m.teams[t].rw}</span>`).join(' : ')}</div></div>
@@ -662,7 +663,7 @@ function vRecords() {
     <h2 class="section">Kariyer</h2>
     <div class="grid g3">
       ${career('Toplam kill', (p) => p.kills)}${career('Ace', (p) => p.aces)}${career('Clutch kazanılan', (p) => p.clutchWon)}
-      ${career('Takımı sırtlayan', (p) => p.carries || 0)}${career('Maçı satan', (p) => p.throws || 0)}${career('İlk kan', (p) => p.fb)}
+      ${career('Fare (pusu kill)', (p) => p.ambush || 0)}${career('Takımı sırtlayan', (p) => p.carries || 0)}${career('Maçı satan', (p) => p.throws || 0)}${career('İlk kan', (p) => p.fb)}
       ${career('Eko kill', (p) => p.ecoKills)}${career('Spike kuran', (p) => p.plants)}
       ${career('Operator kill', (p) => p.weapons.Operator || 0)}${career('Sheriff kill', (p) => p.weapons.Sheriff || 0)}${career('Bıçak kill', (p) => p.weapons['Bıçak'] || 0)}
     </div>`;

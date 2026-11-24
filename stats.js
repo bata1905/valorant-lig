@@ -38,10 +38,35 @@
     });
     const res = computeInner(matches, opts, w);
     res.victimWeight = w;
+    res.viewCal = calibrateView(matches);
     return res;
   }
 
+  // Ölenin baktığı yönün hangi eksen düzenine göre verildiğini veriden bulur:
+  // çoğu düelloda ölen katile bakıyordur, ortalama açıyı en küçük yapan düzen doğrudur.
+  function calibrateView(matches) {
+    const samples = [];
+    matches.forEach((m) => m.kills.forEach((k) => {
+      if (k.vv == null || k.kx == null || k.x == null) return;
+      const dx = k.kx - k.x, dy = k.ky - k.y;
+      if (dx * dx + dy * dy < 300 * 300) return;
+      samples.push([k.vv, Math.atan2(dy, dx)]);
+    }));
+    if (samples.length < 30) return null;
+    let best = null;
+    [1, -1].forEach((sg) => [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach((off) => {
+      let sum = 0;
+      samples.forEach(([v, a]) => { sum += angDiff(sg * v + off, a); });
+      const mean = sum / samples.length;
+      if (!best || mean < best.mean) best = { sg, off, mean };
+    }));
+    return best;
+  }
+  function angDiff(a, b) { let d = Math.abs(a - b) % (2 * Math.PI); return d > Math.PI ? 2 * Math.PI - d : d; }
+  const AMBUSH_ANGLE = (110 * Math.PI) / 180; // ölen, katile 110°'den fazla sırtını dönmüşse pusu
+
   function computeInner(matches, opts, vw) {
+    const viewCal = calibrateView(matches);
     const minGames = opts.minGames || 3;
     const P = {};
     const ms = matches.slice().sort((a, b) => (a.start < b.start ? -1 : 1));
@@ -111,6 +136,13 @@
           if (teamOf[k.k] !== teamOf[k.v]) {
             m._wk[k.k] += vw ? vw[k.v] || 1 : 1;
             const s = P[k.k];
+            if (viewCal && k.vv != null && k.kx != null && k.x != null) {
+              const dx = k.kx - k.x, dy = k.ky - k.y;
+              if (dx * dx + dy * dy >= 300 * 300 && angDiff(viewCal.sg * k.vv + viewCal.off, Math.atan2(dy, dx)) > AMBUSH_ANGLE) {
+                s.ambush = (s.ambush || 0) + 1;
+                k._ambush = true;
+              }
+            }
             s.weapons[k.w] = (s.weapons[k.w] || 0) + 1;
             const on = (s.killsOn[k.v] = s.killsOn[k.v] || { total: 0, w: {} });
             on.total++; on.w[k.w] = (on.w[k.w] || 0) + 1;
