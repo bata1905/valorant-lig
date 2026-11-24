@@ -1,0 +1,23 @@
+{
+  "seed_players": ["Bata1905#1905"],
+  "collect_min_games": 2,
+  "league_min_games": 3,
+  "exclude_match_ids": [],
+  "seed_match_ids": [
+    "b0971eed-57d5-4e92-8555-48189451f064",
+    "aadba88e-aad7-436f-badd-882c5df3b57e",
+    "d9e5bf59-fa01-4395-a27f-1d29693799c3",
+    "6aa96fd7-78cd-461b-8736-0288e9cedfad",
+    "0fa1e1b2-08d6-4b28-a4c7-47a7230ab7ab",
+    "dbe88a09-6b25-4856-88c1-86ec0d456152",
+    "e9824d3f-79e9-4a53-87b8-defe89c0a209",
+    "c884487b-dbc2-4236-9326-1fc431332fa4",
+    "eb482226-1ca2-4954-ba21-f423c72612d3",
+    "347d4677-836e-41a8-9162-2967e3909afd",
+    "09ed32a6-99a4-4f3f-9db0-454c19038901",
+    "8af84d33-4a0a-4fa2-864d-3b0f115660d5",
+    "59a7e153-ed38-4669-ac18-9798ab901dc7",
+    "41e4e38e-593c-48a0-af6b-9e3e41a373b5",
+    "aa6c7bc1-50ff-41cf-92be-921cb4fb30d1"
+  ]
+}
