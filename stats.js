@@ -440,7 +440,14 @@
   // FIFA/FM tarzı genel güç (OVR): 70 lobi ortalaması, her 0.10 etki ≈ 5 puan, 40-99 arası.
   function ovrFrom(str) { return Math.max(40, Math.min(99, Math.round(70 + (str - START_RATING) / 10))); }
   function ovr(P, id) { return ovrFrom(strength(P, id)); }
-  const api = { compute, winProb, balance, synergy, nightKey, strength, matchup, ovr, ovrFrom, START_RATING };
+  // Temkinli OVR: belirsizlik payı düşülmüş güç. Az maç = büyük pay (4 maç ≈ −5, 36 maç ≈ −1.7).
+  function ovrSafe(P, id) {
+    const p = P[id];
+    const g = p ? p.games : 0;
+    const raw = 70 + (strength(P, id) - START_RATING) / 10;
+    return raw - 10 / Math.sqrt(Math.max(1, g));
+  }
+  const api = { compute, winProb, balance, synergy, nightKey, strength, matchup, ovr, ovrFrom, ovrSafe, START_RATING };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VStats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

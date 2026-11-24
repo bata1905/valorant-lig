@@ -20,7 +20,9 @@ const pLink = (id, withImg) => {
   if (!p) return '?';
   return `<a class="pname" href="#/oyuncu/${id}">${withImg && p.favAgent ? agentImg(p.favAgent) : ''}<span>${esc(p.name)}</span></a>`;
 };
-const leaguePlayers = () => Object.values(S.st.players).filter((p) => p.league).sort((a, b) => b.rating - a.rating);
+const safe = (id) => V.ovrSafe(S.st.players, id);
+const ovrCls = (v) => (v >= 85 ? 'o4' : v >= 75 ? 'o3' : v >= 65 ? 'o2' : 'o1');
+const leaguePlayers = () => Object.values(S.st.players).filter((p) => p.league).sort((a, b) => safe(b.puuid) - safe(a.puuid));
 const allPlayers = () => Object.values(S.st.players).sort((a, b) => b.games - a.games);
 const matchById = (id) => S.st.matches.find((m) => m.id === id);
 const formHtml = (f) => `<span class="form">${f.slice(-8).map((x) => `<i class="${x}"></i>`).join('')}</span>`;
@@ -189,8 +191,8 @@ function vHome() {
       <div class="leader">
         <span class="muted">Ligin lideri</span>
         <a href="#/oyuncu/${leader.puuid}" style="font-weight:800;font-size:22px">${esc(leader.name)}</a>
-        <span class="big">${f0(leader.rating)}</span>
-        <span class="muted">${leader.games} maçta etki ${f2(leader.impact)}</span>
+        <span class="big">${f1(safe(leader.puuid))}</span>
+        <span class="muted">güç, ${leader.games} maçta etki ${f2(leader.impact)}</span>
       </div>
       <div class="verdicts">${verdictHtml(lastMatch)}</div>
     </section>` : '';
@@ -205,7 +207,8 @@ function vHome() {
   const cols = [
     { key: 'rank', label: '#', val: (p) => (rankOf[p.puuid] ? -rankOf[p.puuid] : -999), fmt: (p) => `<span class="rank r${rankOf[p.puuid] || ''}">${rankOf[p.puuid] || '–'}</span>` },
     { key: 'name', label: 'Oyuncu', cls: 'l', val: (p) => p.name, fmt: (p) => pLink(p.puuid, true) + (p.league ? '' : ' <span class="tag">misafir</span>') },
-    { key: 'rating', label: 'Puan', title: 'Yanındaki küçük sayı: son gece kazandığı/kaybettiği puan (o gece oynamadıysa boş)', fmt: (p) => { const d = nightDelta[p.puuid]; return `<span class="rating">${f0(p.rating)}</span>${d != null ? `<span class="delta ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : ''}${f0(d)}</span>` : ''}`; } },
+    { key: 'safe', label: 'Güç', title: 'Sıralama bu sütuna göre: maç başına performanstan hesaplanan güç (OVR), az maç oynayanlardan belirsizlik payı düşülür', val: (p) => safe(p.puuid), fmt: (p) => `<span class="ovr ${ovrCls(Math.round(safe(p.puuid)))}">${f1(safe(p.puuid))}</span>` },
+    { key: 'rating', label: 'Lig puanı', opt: true, title: 'Yanındaki küçük sayı: son gece kazandığı/kaybettiği puan (o gece oynamadıysa boş)', fmt: (p) => { const d = nightDelta[p.puuid]; return `<span class="rating">${f0(p.rating)}</span>${d != null ? `<span class="delta ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : ''}${f0(d)}</span>` : ''}`; } },
     { key: 'impact', label: 'Etki', title: 'Maç başına ortalama performans (1.00 = lobi ortalaması)', fmt: (p) => `<span class="imp">${f2(p.impact)}<span class="bar opt"><span style="width:${(100 * (p.impact || 0)) / maxImp}%"></span></span></span>` },
     { key: 'trend', label: 'Gidişat', nosort: true, opt: true, fmt: (p) => spark(p.ratingHist) },
     { key: 'games', label: 'Maç', opt: true },
@@ -222,7 +225,7 @@ function vHome() {
   ];
   app.innerHTML = `${board}
     <h1>Sıralama</h1>
-    <p class="lead">Puan, her maçta lobinin ortalamasına göre ne kadar iyi oynadığına bakar. Kill en ağırlıklı kısım ve güçlü birini öldürmek daha değerli. Hasar, KAST ve ilk kan da sayılır. Güçlü takımı yenmek iyi bonus getirir, favoriyken kazanmak az. Sıralamaya girmek için ${S.cfg.league_min_games || 3} maç gerekir.</p>
+    <p class="lead">Sıralama <b>güce</b> göre: maç başına ne kadar iyi oynadığın (kill en ağırlıklı, güçlü birini öldürmek daha değerli; hasar, KAST ve ilk kan da sayılır). Az maç oynayanlardan belirsizlik payı düşülür, kendini kanıtladıkça kalkar. Böylece çok oynayan sadece çok oynadığı için, az oynayan da şans eseri iyi bir geceyle öne geçemez. Lig puanı ise maçlar boyunca biriken puan; güçlü takımı yenmek orada bonus getirir. Sıralamaya girmek için ${S.cfg.league_min_games || 5} maç gerekir.</p>
     <div class="card tight" id="tbl">${table('lb', cols, rows, { sort: 'rank', rowCls: (p) => (p.league ? '' : 'guest'), href: (p) => '#/oyuncu/' + p.puuid })}</div>`;
   wireTables(vHome);
 }
@@ -249,7 +252,7 @@ function vPlayer(id) {
       ${p.favAgent && S.assets.agents[p.favAgent] ? `<img src="${S.assets.agents[p.favAgent].icon}">` : ''}
       <div><h1 style="margin:0">${esc(p.name)} <span class="tag">#${esc(p.tag)}</span></h1>
       <div class="muted">${rank ? rank + '. sırada' : 'Misafir oyuncu'}, ${p.games} maç ${formHtml(p.form)}</div></div>
-      <div style="margin-left:auto;text-align:right"><div class="big">${f0(p.rating)}</div><div class="muted">lig puanı</div></div>
+      <div style="margin-left:auto;text-align:right"><div class="big">${f1(safe(p.puuid))}</div><div class="muted">güç (temkinli OVR), lig puanı ${f0(p.rating)}</div></div>
     </div>
     <h2>Oyuncu kartı</h2>
     ${fmProfile(p)}
@@ -318,7 +321,7 @@ function playerBadges(p) {
   const top = (fn) => L.slice().sort((a, b) => fn(b) - fn(a))[0];
   const out = [];
   const add = (cond, txt) => cond && out.push(txt);
-  add(top((x) => x.rating).puuid === p.puuid, '👑 Ligin lideri');
+  add(top((x) => safe(x.puuid)).puuid === p.puuid, '👑 Ligin lideri');
   add(top((x) => x.hsPct).puuid === p.puuid, '🎯 Keskin nişancı (en yüksek HS%)');
   add(top((x) => x.fb / x.rounds).puuid === p.puuid, '⚡ Giriş ustası (en çok ilk kan)');
   add(top((x) => x.clutchWon).puuid === p.puuid && p.clutchWon > 0, '🧊 Clutch kralı');
@@ -665,7 +668,6 @@ function vMatch(id) {
 }
 
 // ---------- Takım kurucu ----------
-const ovrCls = (v) => (v >= 85 ? 'o4' : v >= 75 ? 'o3' : v >= 65 ? 'o2' : 'o1');
 const pow = (id) => V.ovr(S.st.players, id);
 function teamList(ids, cls) {
   return `<ul>${ids.map((id) => `<li>${pLink(id, true)} <span class="ovr ${ovrCls(pow(id))}" title="Genel güç (OVR)">${pow(id)}</span></li>`).join('')}</ul>`;
