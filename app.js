@@ -78,10 +78,14 @@ async function loadAssets() {
 
 async function init() {
   try {
-    const [d, cfg] = await Promise.all([
+    const [d, cfg, extra] = await Promise.all([
       fetch('data/matches.json?v=' + Date.now()).then((r) => r.json()),
       fetch('data/config.json?v=' + Date.now()).then((r) => r.json()).catch(() => ({})),
+      // Tracker'dan elle alınan eski maçlar (API'de artık bulunmayanlar)
+      fetch('data/extra_matches.json?v=' + Date.now()).then((r) => (r.ok ? r.json() : { matches: [] })).catch(() => ({ matches: [] })),
     ]);
+    const ids = new Set(d.matches.map((m) => m.id));
+    (extra.matches || []).forEach((m) => { if (!ids.has(m.id)) d.matches.push(m); });
     S.data = d; S.cfg = cfg;
   } catch (e) {
     app.innerHTML = '<div class="loading">Veri henüz yok. Toplayıcı ilk kez çalıştığında burada görünecek.</div>';
