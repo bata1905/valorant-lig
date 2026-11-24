@@ -26,8 +26,21 @@
     return d.toISOString().slice(0, 10);
   }
 
+  // İki geçiş: önce herkesin ortalama Etki'si bulunur, sonra kill'ler ölen oyuncunun
+  // gücüne göre ağırlıklandırılarak puan yeniden hesaplanır (güçlü oyuncuyu öldürmek daha değerli).
   function compute(matches, opts) {
     opts = opts || {};
+    const first = computeInner(matches, opts, null);
+    const w = {};
+    Object.values(first.players).forEach((p) => {
+      w[p.puuid] = Math.max(0.6, Math.min(1.6, p.games >= 2 ? p.impact : 1));
+    });
+    const res = computeInner(matches, opts, w);
+    res.victimWeight = w;
+    return res;
+  }
+
+  function computeInner(matches, opts, vw) {
     const minGames = opts.minGames || 3;
     const P = {};
     const ms = matches.slice().sort((a, b) => (a.start < b.start ? -1 : 1));
@@ -79,6 +92,8 @@
 
       // Kill olayları
       const byRound = {};
+      m._wk = {};
+      m.players.forEach((p) => (m._wk[p.p] = 0));
       for (const k of m.kills) {
         (byRound[k.r] = byRound[k.r] || []).push(k);
         weaponTotals[k.w] = weaponTotals[k.w] || { kills: 0, by: {} };
@@ -86,6 +101,7 @@
         if (k.k && P[k.k]) {
           weaponTotals[k.w].by[k.k] = (weaponTotals[k.w].by[k.k] || 0) + 1;
           if (teamOf[k.k] !== teamOf[k.v]) {
+            m._wk[k.k] += vw ? vw[k.v] || 1 : 1;
             const s = P[k.k];
             s.weapons[k.w] = (s.weapons[k.w] || 0) + 1;
             const on = (s.killsOn[k.v] = s.killsOn[k.v] || { total: 0, w: {} });
@@ -172,7 +188,7 @@
       // Performans puanı: her maçta lobi ortalamasına göre kill (ağırlıklı), hasar, KAST ve ilk kan.
       // Takım sonucu sadece küçük bir bonus/ceza; kötü takıma düşmek puanı fazla etkilemez.
       const n = m.players.length;
-      const avgKpr = m.players.reduce((x, p) => x + p.k, 0) / n / roundsTotal || 1;
+      const avgWk = m.players.reduce((x, p) => x + m._wk[p.p], 0) / n || 1;
       const avgAdr = m.players.reduce((x, p) => x + p.dd, 0) / n / roundsTotal || 1;
       const avgKast = m.players.reduce((x, p) => x + m._extra[p.p].kast, 0) / n / roundsTotal || 1;
       const weight = Math.min(1, roundsTotal / 20);
@@ -180,7 +196,7 @@
       m._impact = {};
       for (const p of m.players) {
         const s = P[p.p], e = m._extra[p.p];
-        const impact = 0.55 * (p.k / roundsTotal / avgKpr) + 0.25 * (p.dd / roundsTotal / avgAdr)
+        const impact = 0.55 * (m._wk[p.p] / avgWk) + 0.25 * (p.dd / roundsTotal / avgAdr)
           + 0.12 * (e.kast / roundsTotal / avgKast) + 0.08 * (1 + (3 * (e.fb - e.fd)) / roundsTotal);
         m._impact[p.p] = impact;
         let delta = RATING_SCALE * (impact - 1);

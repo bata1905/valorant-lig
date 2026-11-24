@@ -153,7 +153,7 @@ function vHome() {
   ];
   app.innerHTML = `${night}
     <h1>Lig Sıralaması</h1>
-    <p class="muted">Puan bireysel performansa göre hesaplanır: her maçta lobinin ortalamasına göre kill (en ağırlıklı), hasar, KAST ve ilk kan/ilk ölüm farkına bakılır. Ortalamanın üstünde oynayan puan kazanır. Maçı kazanmak sadece küçük bir bonus (±4) verir, yani kötü takıma düşmek seni fazla cezalandırmaz. Yarıda kalan maçlar oynanan raund kadar sayılır. Sıralamaya girmek için en az ${S.cfg.league_min_games || 3} maç gerekir.</p>
+    <p class="muted">Puan bireysel performansa göre hesaplanır: her maçta lobinin ortalamasına göre kill (en ağırlıklı; güçlü oyuncuyu öldürmek daha değerli, zayıf oyuncuyu öldürmek daha az), hasar, KAST ve ilk kan/ilk ölüm farkına bakılır. Ortalamanın üstünde oynayan puan kazanır. Maçı kazanmak sadece küçük bir bonus (±4) verir, yani kötü takıma düşmek seni fazla cezalandırmaz. Yarıda kalan maçlar oynanan raund kadar sayılır. Sıralamaya girmek için en az ${S.cfg.league_min_games || 3} maç gerekir.</p>
     <div class="card tight" id="tbl">${table('lb', cols, rows, { sort: 'rank', rowCls: (p) => (p.league ? '' : 'guest'), href: (p) => '#/oyuncu/' + p.puuid })}</div>`;
   wireTables(vHome);
 }
