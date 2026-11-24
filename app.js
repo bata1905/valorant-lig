@@ -142,6 +142,8 @@ function vHome() {
     { key: 'winPct', label: 'Kazanma', fmt: (p) => pct(p.winPct) },
     { key: 'form', label: 'Form', nosort: true, fmt: (p) => formHtml(p.form) },
     { key: 'kd', label: 'K/D', fmt: (p) => f2(p.kd) },
+    { key: 'impact', label: 'Etki', title: 'Maç başına ortalama performans (1.00 = lobi ortalaması)', fmt: (p) => f2(p.impact) },
+    { key: 'kpr', label: 'KPR', title: 'Raund başına kill', fmt: (p) => f2(p.kpr) },
     { key: 'acs', label: 'ACS', title: 'Raund başına ortalama skor', fmt: (p) => f0(p.acs) },
     { key: 'adr', label: 'ADR', title: 'Raund başına hasar', fmt: (p) => f0(p.adr) },
     { key: 'hsPct', label: 'HS%', fmt: (p) => pct(p.hsPct) },
@@ -151,7 +153,7 @@ function vHome() {
   ];
   app.innerHTML = `${night}
     <h1>Lig Sıralaması</h1>
-    <p class="muted">Puan Elo tabanlıdır: güçlü takımı yenmek daha çok puan getirir, maç içi performans (ACS) küçük bir bonus/ceza ekler. Sıralamaya girmek için en az ${S.cfg.league_min_games || 3} maç gerekir. Sadece tamamlanmış maçlar puanı etkiler.</p>
+    <p class="muted">Puan bireysel performansa göre hesaplanır: her maçta lobinin ortalamasına göre kill (en ağırlıklı), hasar, KAST ve ilk kan/ilk ölüm farkına bakılır. Ortalamanın üstünde oynayan puan kazanır. Maçı kazanmak sadece küçük bir bonus (±4) verir, yani kötü takıma düşmek seni fazla cezalandırmaz. Yarıda kalan maçlar oynanan raund kadar sayılır. Sıralamaya girmek için en az ${S.cfg.league_min_games || 3} maç gerekir.</p>
     <div class="card tight" id="tbl">${table('lb', cols, rows, { sort: 'rank', rowCls: (p) => (p.league ? '' : 'guest'), href: (p) => '#/oyuncu/' + p.puuid })}</div>`;
   wireTables(vHome);
 }

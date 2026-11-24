@@ -1,7 +1,8 @@
 // Saf istatistik hesapları (DOM yok). Tarayıcıda window.VStats, Node'da module.exports.
 (function (root) {
   const START_RATING = 1000;
-  const K_FACTOR = 32;
+  const RATING_SCALE = 50; // lobi ortalamasının %10 üstü = +5 puan
+  const WIN_BONUS = 4;
   const TRADE_MS = 5000;
 
   function emptyPlayer(p) {
@@ -168,16 +169,34 @@
         records.push({ type: 'aces', val: e.aces, p: p.p, m: m.id });
       }
 
-      // Tamamlanan maçlar: galibiyet, ikili sinerji, reyting
+      // Performans puanı: her maçta lobi ortalamasına göre kill (ağırlıklı), hasar, KAST ve ilk kan.
+      // Takım sonucu sadece küçük bir bonus/ceza; kötü takıma düşmek puanı fazla etkilemez.
+      const n = m.players.length;
+      const avgKpr = m.players.reduce((x, p) => x + p.k, 0) / n / roundsTotal || 1;
+      const avgAdr = m.players.reduce((x, p) => x + p.dd, 0) / n / roundsTotal || 1;
+      const avgKast = m.players.reduce((x, p) => x + m._extra[p.p].kast, 0) / n / roundsTotal || 1;
+      const weight = Math.min(1, roundsTotal / 20);
+      m._ratingDelta = {};
+      m._impact = {};
+      for (const p of m.players) {
+        const s = P[p.p], e = m._extra[p.p];
+        const impact = 0.55 * (p.k / roundsTotal / avgKpr) + 0.25 * (p.dd / roundsTotal / avgAdr)
+          + 0.12 * (e.kast / roundsTotal / avgKast) + 0.08 * (1 + (3 * (e.fb - e.fd)) / roundsTotal);
+        m._impact[p.p] = impact;
+        let delta = RATING_SCALE * (impact - 1);
+        if (m.completed && winner) delta += p.team === winner ? WIN_BONUS : -WIN_BONUS;
+        delta = Math.max(-40, Math.min(40, delta)) * weight;
+        s.rating += delta;
+        s.impactSum = (s.impactSum || 0) + impact;
+        m._ratingDelta[p.p] = delta;
+        s.ratingHist.push({ m: m.id, r: s.rating, d: delta, date: m.start });
+      }
+
+      // Tamamlanan maçlar: galibiyet, ikili sinerji
       if (m.completed && winner) {
         mapTotals[m.map].lastWinner = winner;
         const teams = {};
         m.players.forEach((p) => { (teams[p.team] = teams[p.team] || []).push(p); });
-        const tids = Object.keys(teams);
-        const avg = {};
-        tids.forEach((t) => { avg[t] = teams[t].reduce((s, p) => s + P[p.p].rating, 0) / teams[t].length; });
-        const matchAvgAcs = m.players.reduce((s, p) => s + m._acs[p.p], 0) / m.players.length;
-        m._ratingDelta = {};
         for (const p of m.players) {
           const s = P[p.p];
           const won = p.team === winner;
@@ -188,16 +207,6 @@
           s.form.push(won ? 'W' : 'L');
           s.maps[m.map][won ? 'w' : 'l']++;
           if (p.ag && s.agents[p.ag]) s.agents[p.ag].w += won ? 1 : 0;
-          const opp = tids.filter((t) => t !== p.team);
-          const oppAvg = opp.reduce((x, t) => x + avg[t], 0) / (opp.length || 1);
-          const exp = 1 / (1 + Math.pow(10, (oppAvg - avg[p.team]) / 400));
-          const perf = Math.max(-6, Math.min(6, (m._acs[p.p] / (matchAvgAcs || 1) - 1) * 12));
-          const roundMargin = Math.abs(m.teams[tids[0]].rw - (m.teams[tids[1]] || { rw: 0 }).rw);
-          const marginMult = 1 + Math.min(roundMargin, 10) / 20;
-          const delta = K_FACTOR * marginMult * ((won ? 1 : 0) - exp) + perf;
-          s.rating += delta;
-          m._ratingDelta[p.p] = delta;
-          s.ratingHist.push({ m: m.id, r: s.rating, d: delta, date: m.start });
           for (const q of teams[p.team]) {
             if (q.p === p.p) continue;
             const mt = (s.mates[q.p] = s.mates[q.p] || { g: 0, w: 0 });
@@ -223,6 +232,7 @@
       s.kast = (100 * s.kastRounds) / Math.max(1, s.rounds);
       s.winPct = (100 * s.wins) / Math.max(1, s.completed);
       s.kpr = s.kills / Math.max(1, s.rounds);
+      s.impact = (s.impactSum || 0) / Math.max(1, s.games);
       s.league = s.games >= minGames;
       let nem = null, vic = null;
       for (const [q, v] of Object.entries(s.deathsBy)) if (!nem || v.total > nem.n) nem = { p: q, n: v.total };
