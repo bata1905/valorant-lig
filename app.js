@@ -153,7 +153,7 @@ function vHome() {
           const tids = Object.keys(m.teams);
           return `<a class="res" href="#/mac/${m.id}"><span class="map">${esc(m.map)}</span>
             <span class="sc">${tids.map((t) => `<span class="team-${t}">${m.teams[t].rw}</span>`).join('<span class="dim">:</span>')}</span>
-            <span class="dim">${m.completed ? '' : 'yarıda kaldı'}</span></a>`;
+            <span class="dim">${m.ff ? 'FF' : m.completed ? '' : 'yarıda kaldı'}</span></a>`;
         }).join('')}</div>
       </div>
       <div class="leader">
@@ -457,7 +457,7 @@ function matchCard(m, focus) {
   const tids = Object.keys(m.teams);
   const score = tids.map((t) => `<span class="team-${t}">${m.teams[t].rw}</span>`).join(' : ');
   const me = focus && m.players.find((p) => p.p === focus);
-  const res = me && m.completed ? (m._winner === me.team ? '<span class="up">Galibiyet</span>' : '<span class="down">Mağlubiyet</span>') : !m.completed ? '<span class="muted">Yarıda kaldı</span>' : '';
+  const res = (me && m.completed ? (m._winner === me.team ? '<span class="up">Galibiyet</span>' : '<span class="down">Mağlubiyet</span>') : !m.completed ? '<span class="muted">Yarıda kaldı</span>' : '') + (m.ff ? ' <span class="tag">FF</span>' : '');
   return `<a class="card tight mcard" href="#/mac/${m.id}">
     <div class="mimg" style="background-image:url('${a ? a.splash : ''}')"><span>${esc(m.map)}</span></div>
     <div class="mbody"><div style="display:flex;justify-content:space-between"><span class="score">${score}</span><span>${res}</span></div>
@@ -495,7 +495,7 @@ function vMatch(id) {
     return `<div style="margin-top:10px"><b>Raund ${r + 1}</b> <span class="muted">${rd.w ? (rd.w === 'Red' ? 'Kırmızı kazandı' : 'Mavi kazandı') : ''}${rd.res ? ', ' + esc(rd.res) : ''}</span></div>` +
       ks.map((k) => `<div><span class="w">${(k.t / 1000).toFixed(0)}sn</span><span class="team-${team[k.k]}">${esc(nm(k.k))}</span><span class="muted">[${esc(k.w)}]</span><span class="team-${team[k.v]}">${esc(nm(k.v))}</span></div>`).join('');
   }).join('');
-  app.innerHTML = `<div class="hero"><div><h1 style="margin:0">${esc(m.map)}</h1><div class="muted">${dateTR(m.start)}, ${timeTR(m.start)}${m.completed ? '' : ', yarıda kaldı (raund oranında sayılır)'}</div></div>
+  app.innerHTML = `<div class="hero"><div><h1 style="margin:0">${esc(m.map)}</h1><div class="muted">${dateTR(m.start)}, ${timeTR(m.start)}${m.ff ? ', FF ile bitti (oynanan raund oranında sayılır)' : m.completed ? '' : ', yarıda kaldı (raund oranında sayılır)'}</div></div>
       <div style="margin-left:auto" class="big">${tids.map((t) => `<span class="team-${t}">${m.teams[t].rw}</span>`).join(' : ')}</div></div>
     <div class="board" style="grid-template-columns:1fr;margin-bottom:18px"><div class="verdicts" style="border-top:none">${verdictHtml(m)}</div></div>
     <div class="grid g2">${tids.map(board).join('')}</div>

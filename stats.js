@@ -51,6 +51,13 @@
     const pairStats = {}; // "a|b" -> {g,w}
 
     for (const m of ms) {
+      // Teslim (FF) edilen maçlar: "Surrendered" raundları gerçekte oynanmadı, atılır;
+      // maç teslim alan takımın galibiyeti sayılır.
+      if (m.rounds.some((r) => r.res === 'Surrendered')) {
+        m.ff = true;
+        m.rounds = m.rounds.filter((r) => r.res !== 'Surrendered');
+        if (Object.values(m.teams).some((t) => t.won)) m.completed = true;
+      }
       const roundsTotal = m.rounds.length || Object.values(m.teams).reduce((s, t) => s + t.rw, 0) || 1;
       const teamOf = {};
       const teamSize = {};
