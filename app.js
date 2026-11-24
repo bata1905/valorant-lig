@@ -507,28 +507,139 @@ function vMatch(id) {
 }
 
 // ---------- Takım kurucu ----------
+const pow = (id) => V.strength(S.st.players, id);
+function teamList(ids, cls) {
+  return `<ul>${ids.map((id) => `<li>${pLink(id, true)} <span class="num muted" title="Güç (etkiden)">${f0(pow(id))}</span></li>`).join('')}</ul>`;
+}
+function probBar(prob) {
+  return `<div class="probbar"><span style="width:${prob * 100}%"></span><span style="width:${(1 - prob) * 100}%"></span></div>
+    <div class="muted" style="margin-top:6px">Kazanma şansı: A %${Math.round(prob * 100)}, B %${Math.round((1 - prob) * 100)}</div>`;
+}
+
 function vTeams() {
-  // Varsayılan seçim: son maçta oynayanlar
   const lastM = S.st.matches[S.st.matches.length - 1];
-  const st = (S.ui.tb = S.ui.tb || { sel: new Set(lastM.players.map((p) => p.p)), res: null, pick: 0 });
-  const ps = allPlayers();
-  const res = st.sel.size >= 2 ? V.balance([...st.sel], S.st.players, S.st.pairs, 5) : [];
-  const r = res[st.pick] || res[0];
-  const li = (id) => `<li>${pLink(id, true)} <span class="num muted">${f0(P(id).rating)}</span></li>`;
+  const st = (S.ui.tb = S.ui.tb || { sel: new Set(lastM.players.map((p) => p.p)), pick: 0, mode: 'auto', rules: [], draft: null });
+  const ps = allPlayers().slice().sort((a, b) => pow(b.puuid) - pow(a.puuid));
+  const sel = ps.map((p) => p.puuid).filter((id) => st.sel.has(id));
+  const opts = (chosen) => sel.map((id) => `<option value="${id}" ${id === chosen ? 'selected' : ''}>${esc(nm(id))}</option>`).join('');
+
+  const picker = `<div class="card"><div class="picker">${ps.map((p) => `<label class="${st.sel.has(p.puuid) ? 'on' : ''}"><input type="checkbox" data-p="${p.puuid}" ${st.sel.has(p.puuid) ? 'checked' : ''}>${esc(p.name)} <span class="num muted">${f0(pow(p.puuid))}</span></label>`).join('')}</div>
+    <div class="muted" style="margin-top:10px">${st.sel.size} oyuncu seçili. Yanındaki sayı oyuncunun gücü: maç başına etkisinden hesaplanır, 1000 lobi ortalaması.</div></div>`;
+
+  const modeBar = `<div class="filters section">
+    <button data-mode="auto" class="${st.mode === 'auto' ? 'primary' : ''}">Otomatik dengele</button>
+    <button data-mode="draft" class="${st.mode === 'draft' ? 'primary' : ''}">Kaptan seçimi</button></div>`;
+
+  let body = '';
+  if (st.mode === 'auto') {
+    const rules = st.rules.filter((r) => st.sel.has(r.a) && st.sel.has(r.b));
+    const res = sel.length >= 2 ? V.balance(sel, S.st.players, S.st.pairs, 5, rules) : [];
+    const r = res[st.pick] || res[0];
+    body = `<div class="card">
+        <h3>Kurallar</h3>
+        <div class="filters" style="margin-bottom:8px">
+          <select id="ra">${opts(st.ra)}</select>
+          <select id="rt"><option value="together">aynı takımda olsun</option><option value="apart">ayrı takımlarda olsun</option></select>
+          <select id="rb">${opts(st.rb || sel[1])}</select>
+          <button id="radd">Kural ekle</button>
+        </div>
+        ${st.rules.length ? st.rules.map((x, i) => `<span class="badge">${esc(nm(x.a))} ve ${esc(nm(x.b))} ${x.type === 'together' ? 'aynı takımda' : 'ayrı takımlarda'} <button data-rdel="${i}" style="padding:0 6px;border:none;background:none" aria-label="Kuralı sil">✕</button></span>`).join('') : '<span class="muted">Kural yok. İstersen iki kişiyi aynı ya da ayrı takıma zorlayabilirsin.</span>'}
+      </div>
+      ${r ? `<div class="card section">
+        <div class="filters">${res.map((x, i) => `<button data-i="${i}" class="${i === st.pick ? 'primary' : ''}">Seçenek ${i + 1}: %${Math.round(x.prob * 100)}-%${Math.round((1 - x.prob) * 100)}</button>`).join('')}</div>
+        <div class="split"><div><h2 class="team-Red">Takım A</h2>${teamList(r.A)}<div class="muted">Ortalama güç ${f0(r.ra)}</div></div>
+          <div class="vs">VS</div>
+          <div><h2 class="team-Blue">Takım B</h2>${teamList(r.B)}<div class="muted">Ortalama güç ${f0(r.rb)}</div></div></div>
+        ${probBar(r.prob)}
+      </div>` : `<div class="card section muted">${sel.length < 2 ? 'En az 2 oyuncu seç.' : 'Bu kurallarla takım kurulamıyor. Bir kuralı sil.'}</div>`}`;
+  } else {
+    const d = st.draft;
+    if (!d) {
+      body = `<div class="card"><h3>Kaptanları seç</h3>
+        <div class="filters"><span class="team-Red" style="font-weight:700">Kaptan A</span><select id="ca">${opts(sel[0])}</select>
+        <span class="team-Blue" style="font-weight:700">Kaptan B</span><select id="cb">${opts(sel[1])}</select>
+        <button class="primary" id="dstart">Seçimi başlat</button></div>
+        <p class="muted">Sıra yılan düzeninde gider: A, B, B, A, A, B... Her sırada site iki öneri verir: en güçlü oyuncu ve maçı en dengeli tutacak oyuncu.</p></div>`;
+    } else {
+      const pool = sel.filter((id) => !d.A.includes(id) && !d.B.includes(id));
+      const total = d.A.length + d.B.length + pool.length;
+      const order = []; // yılan sırası
+      for (let i = 0; order.length < total - 2; i++) order.push([0, 1, 1, 0][i % 4] === 0 ? 'A' : 'B');
+      const turn = pool.length ? order[d.A.length + d.B.length - 2] : null;
+      const sizeA = Math.ceil(total / 2), sizeB = Math.floor(total / 2);
+      // Dengeyi koruyan öneri: adayı ekledikten sonra kalanların en iyi dağılımıyla ulaşılabilecek en dengeli sonuç
+      const bestFinish = (A, B, rest) => {
+        let best = 1;
+        const needA = Math.max(0, sizeA - A.length);
+        const rec = (i, a, b) => {
+          if (a.length === needA) {
+            const fa = [...A, ...a], fb = [...B, ...b, ...rest.slice(i)];
+            if (fb.length > sizeB + 1) return;
+            best = Math.min(best, Math.abs(V.matchup(S.st.players, S.st.pairs, fa, fb).prob - 0.5));
+            return;
+          }
+          if (i >= rest.length) return;
+          rec(i + 1, [...a, rest[i]], b);
+          rec(i + 1, a, [...b, rest[i]]);
+        };
+        rec(0, [], []);
+        return best;
+      };
+      let strongest = null, fairest = null;
+      if (turn) {
+        strongest = pool[0];
+        let bf = 2;
+        pool.forEach((c) => {
+          const A = turn === 'A' ? [...d.A, c] : d.A, B = turn === 'B' ? [...d.B, c] : d.B;
+          const v = bestFinish(A, B, pool.filter((x) => x !== c));
+          if (v < bf) { bf = v; fairest = c; }
+        });
+      }
+      const mu = V.matchup(S.st.players, S.st.pairs, d.A, d.B);
+      body = `<div class="card">
+        <div class="split"><div><h2 class="team-Red">Takım A</h2>${teamList(d.A)}</div><div class="vs">VS</div><div><h2 class="team-Blue">Takım B</h2>${teamList(d.B)}</div></div>
+        ${probBar(mu.prob)}
+      </div>
+      ${turn ? `<div class="card section"><h2 class="team-${turn === 'A' ? 'Red' : 'Blue'}">Sıra: Kaptan ${turn} (${esc(nm(d[turn][0]))})</h2>
+        <p class="muted">En güçlü kalan: <b>${esc(nm(strongest))}</b>. Maçı dengeli tutmak için öneri: <b>${esc(nm(fairest))}</b>.</p>
+        <div class="picker">${pool.map((id) => `<label data-dpick="${id}" class="${id === fairest ? 'on' : ''}">${esc(nm(id))} <span class="num muted">${f0(pow(id))}</span></label>`).join('')}</div>
+      </div>` : `<div class="card section"><h2>Seçim tamamlandı</h2></div>`}
+      <div class="filters section"><button id="dundo">Geri al</button><button id="dreset">Baştan başla</button></div>`;
+    }
+  }
+
   app.innerHTML = `<h1>Takım kur</h1>
-    <p class="lead">Bu gece gelenleri seç. Site puanlara ve kimin kiminle birlikte daha çok kazandığına bakıp en dengeli takımları önerir.</p>
-    <div class="card"><div class="picker">${ps.map((p) => `<label class="${st.sel.has(p.puuid) ? 'on' : ''}"><input type="checkbox" data-p="${p.puuid}" ${st.sel.has(p.puuid) ? 'checked' : ''}>${esc(p.name)} <span class="muted">${f0(p.rating)}</span></label>`).join('')}</div>
-    <div class="muted" style="margin-top:10px">${st.sel.size} oyuncu seçili</div></div>
-    ${r ? `<div class="card section">
-      <div class="filters">${res.map((x, i) => `<button data-i="${i}" class="${i === st.pick ? 'primary' : ''}">Seçenek ${i + 1}: %${Math.round(x.prob * 100)}-%${Math.round((1 - x.prob) * 100)}</button>`).join('')}</div>
-      <div class="split"><div><h2 class="team-Red">Takım A</h2><ul>${r.A.map(li).join('')}</ul><div class="muted">Ort. ${f0(r.ra)}</div></div>
-        <div class="vs">VS</div>
-        <div><h2 class="team-Blue">Takım B</h2><ul>${r.B.map(li).join('')}</ul><div class="muted">Ort. ${f0(r.rb)}</div></div></div>
-      <div class="probbar"><span style="width:${r.prob * 100}%"></span><span style="width:${(1 - r.prob) * 100}%"></span></div>
-      <div class="muted" style="margin-top:6px">Tahmini kazanma şansı: A %${Math.round(r.prob * 100)}, B %${Math.round((1 - r.prob) * 100)}</div>
-    </div>` : ''}`;
-  app.querySelectorAll('[data-p]').forEach((c) => (c.onchange = () => { c.checked ? st.sel.add(c.dataset.p) : st.sel.delete(c.dataset.p); st.pick = 0; vTeams(); }));
-  app.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => { st.pick = +b.dataset.i; vTeams(); }));
+    <p class="lead">Bu gece gelenleri seç. Takımlar oyuncuların maç başına gerçek gücüne ve kimin kiminle daha çok kazandığına göre dengelenir.</p>
+    ${picker}${modeBar}${body}`;
+
+  const rerender = () => vTeams();
+  app.querySelectorAll('[data-p]').forEach((c) => (c.onchange = () => { c.checked ? st.sel.add(c.dataset.p) : st.sel.delete(c.dataset.p); st.pick = 0; st.draft = null; rerender(); }));
+  app.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => { st.pick = +b.dataset.i; rerender(); }));
+  app.querySelectorAll('[data-mode]').forEach((b) => (b.onclick = () => { st.mode = b.dataset.mode; rerender(); }));
+  app.querySelectorAll('[data-rdel]').forEach((b) => (b.onclick = () => { st.rules.splice(+b.dataset.rdel, 1); st.pick = 0; rerender(); }));
+  const q = (id) => document.getElementById(id);
+  if (q('radd')) q('radd').onclick = () => {
+    const a = q('ra').value, b = q('rb').value, type = q('rt').value;
+    st.ra = a; st.rb = b;
+    if (a && b && a !== b) { st.rules.push({ a, b, type }); st.pick = 0; }
+    rerender();
+  };
+  if (q('dstart')) q('dstart').onclick = () => {
+    const a = q('ca').value, b = q('cb').value;
+    if (a === b) return;
+    st.draft = { A: [a], B: [b], log: [] };
+    rerender();
+  };
+  app.querySelectorAll('[data-dpick]').forEach((l) => (l.onclick = () => {
+    const d = st.draft; const id = l.dataset.dpick;
+    const total = sel.length, order = [];
+    for (let i = 0; order.length < total - 2; i++) order.push([0, 1, 1, 0][i % 4] === 0 ? 'A' : 'B');
+    const turn = order[d.A.length + d.B.length - 2];
+    d[turn].push(id); d.log.push(turn);
+    rerender();
+  }));
+  if (q('dundo')) q('dundo').onclick = () => { const d = st.draft; const t = d.log.pop(); if (t) d[t].pop(); rerender(); };
+  if (q('dreset')) q('dreset').onclick = () => { st.draft = null; rerender(); };
 }
 
 // ---------- Rekorlar ----------

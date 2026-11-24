@@ -339,9 +339,29 @@
     return (s.w - s.g / 2) / (s.g + 2); // -0.5..0.5 arası, az maçta küçük
   }
 
-  // Dengeli takımlar: tüm bölünmeleri dener, en dengeli N tanesini döndürür
-  function balance(ids, P, pairs, top) {
+  // Oyuncunun gerçek gücü: maç başına Etki'den türetilir (birikmiş puan değil).
+  // 1.00 etki = 1000; her 0.10 etki = 50 güç. 2 maçtan az oynayan 1000 sayılır.
+  function strength(P, id) {
+    const p = P[id];
+    if (!p || p.games < 2 || !p.impact) return START_RATING;
+    return START_RATING + 500 * (p.impact - 1);
+  }
+  function teamPower(P, pairs, t) {
+    let syn = 0;
+    for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) syn += synergy(pairs, t[i], t[j]);
+    const avg = t.reduce((x, id) => x + strength(P, id), 0) / (t.length || 1);
+    return { avg, syn, power: avg + syn * 100 };
+  }
+  function matchup(P, pairs, A, B) {
+    const a = teamPower(P, pairs, A), b = teamPower(P, pairs, B);
+    return { ra: a.avg, rb: b.avg, sa: a.syn, sb: b.syn, prob: winProb(a.power, b.power) };
+  }
+
+  // Dengeli takımlar: tüm bölünmeleri dener, kurallara (birlikte/ayrı) uymayanları atar,
+  // en dengeli N tanesini döndürür.
+  function balance(ids, P, pairs, top, rules) {
     top = top || 5;
+    rules = rules || [];
     const n = ids.length;
     if (n < 2) return [];
     const half = Math.floor(n / 2);
@@ -349,21 +369,18 @@
     const first = ids[0];
     const rest = ids.slice(1);
     const sizes = n % 2 === 0 ? [half] : [half, half + 1];
-    function teamSyn(t) {
-      let s = 0;
-      for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) s += synergy(pairs, t[i], t[j]);
-      return s;
-    }
-    const rating = (id) => (P[id] ? P[id].rating : START_RATING);
+    const ok = (A) => rules.every((r) => {
+      if (!ids.includes(r.a) || !ids.includes(r.b)) return true;
+      const same = A.includes(r.a) === A.includes(r.b);
+      return r.type === 'together' ? same : !same;
+    });
     function rec(start, cur, size) {
       if (cur.length === size) {
         const A = [first, ...cur];
+        if (!ok(A)) return;
         const B = ids.filter((x) => !A.includes(x));
-        const ra = A.reduce((s, x) => s + rating(x), 0) / A.length;
-        const rb = B.reduce((s, x) => s + rating(x), 0) / B.length;
-        const sa = teamSyn(A), sb = teamSyn(B);
-        const prob = winProb(ra + sa * 100, rb + sb * 100);
-        results.push({ A, B, ra, rb, sa, sb, prob, score: Math.abs(prob - 0.5) });
+        const mu = matchup(P, pairs, A, B);
+        results.push({ A, B, ...mu, score: Math.abs(mu.prob - 0.5) });
         return;
       }
       for (let i = start; i < rest.length; i++) { cur.push(rest[i]); rec(i + 1, cur, size); cur.pop(); }
@@ -373,7 +390,7 @@
     return results.slice(0, top);
   }
 
-  const api = { compute, winProb, balance, synergy, nightKey, START_RATING };
+  const api = { compute, winProb, balance, synergy, nightKey, strength, matchup, START_RATING };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VStats = api;
 })(typeof window !== 'undefined' ? window : globalThis);
