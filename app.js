@@ -86,9 +86,13 @@ function applyAliases(matches, aliases) {
     byName[p.n.toLowerCase()] = byName[p.n.toLowerCase()] || { p: p.p, n: p.n, t: p.t };
   }));
   const map = {};
+  // Tracker'dan gelen "tr:isim#tag" kimliklerini, aynı isimli gerçek hesap varsa ona bağla
+  const real = {};
+  matches.forEach((m) => m.players.forEach((p) => { if (!String(p.p).startsWith('tr:')) real[(p.n + '#' + p.t).toLowerCase()] = { p: p.p, n: p.n, t: p.t }; }));
+  matches.forEach((m) => m.players.forEach((p) => { const b = real[(p.n + '#' + p.t).toLowerCase()]; if (String(p.p).startsWith('tr:') && b) map[p.p] = b; }));
   Object.entries(aliases).forEach(([from, to]) => {
     const a = byName[from.toLowerCase()], b = byName[to.toLowerCase()];
-    if (a && b && a.p !== b.p) map[a.p] = b;
+    if (a && b && a.p !== b.p) map[a.p] = map[b.p] || b;
   });
   if (!Object.keys(map).length) return;
   const r = (id) => (map[id] ? map[id].p : id);
