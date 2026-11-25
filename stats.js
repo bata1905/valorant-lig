@@ -277,23 +277,28 @@
 
       // Maçı satan / taşıyan analizi
       const per20 = 20 / roundsTotal;
+      // Satıcı puanı: önce maçtaki genel katkı (etki) belirler, diğer hatalar ek ceza olarak eklenir.
+      // Ölüm sayısıyla büyüyen ölçümler (intikamı alınmayan ölüm, yalnız ölüm) oran olarak kullanılır,
+      // yoksa çok oynayıp çok ölen oyuncu, hiç katkı vermeyenden daha "satıcı" görünüyordu.
       const reasonsOf = (p) => {
         const e = m._extra[p.p], imp = m._impact[p.p];
+        const deaths = Math.max(1, p.d);
         const r = [];
-        if (e.critFd) r.push({ w: 3 * e.critFd, t: `${e.critTxt}'de ilk kanı verdi` });
-        if (e.fd >= 2) r.push({ w: 1.2 * e.fd * per20, t: `${e.fd} raundda ilk ölen oldu` });
-        if (e.iso >= 2) r.push({ w: 1.1 * e.iso * per20, t: `${e.iso} kez takımından uzakta tek başına öldü` });
-        if (e.untraded >= 4) r.push({ w: 0.5 * e.untraded * per20, t: `${e.untraded} ölümünün intikamı alınmadı` });
-        if (e.clutchLost) r.push({ w: 1.5 * e.clutchLost, t: `${e.clutchLost} clutch kaybetti` });
-        if (imp < 0.85) r.push({ w: 12 * (0.85 - imp), t: `lobi ortalamasının %${Math.round((1 - imp) * 100)} altında oynadı` });
-        return r.sort((a, b) => b.w - a.w);
+        const base = 20 * (1 - imp); // ortalamanın altı ceza, üstü artı
+        if (imp < 0.9) r.push({ w: base, t: `lobi ortalamasının %${Math.round((1 - imp) * 100)} altında oynadı (${p.k} kill)` });
+        if (e.critFd) r.push({ w: 2 * e.critFd, t: `${e.critTxt}'de ilk kanı verdi` });
+        if (e.fd >= 3) r.push({ w: 0.6 * e.fd * per20, t: `${e.fd} raundda ilk ölen oldu` });
+        if (e.iso / deaths >= 0.3 && e.iso >= 3) r.push({ w: 4 * (e.iso / deaths), t: `ölümlerinin %${Math.round((100 * e.iso) / deaths)}'inde takımından uzakta tek başınaydı` });
+        if (e.untraded / deaths >= 0.8 && e.untraded >= 5) r.push({ w: 2 * (e.untraded / deaths), t: `${e.untraded} ölümünün intikamı alınmadı` });
+        if (e.clutchLost >= 2) r.push({ w: 0.8 * e.clutchLost, t: `${e.clutchLost} clutch kaybetti` });
+        const score = (imp < 0.9 ? 0 : base) + r.reduce((x, y) => x + y.w, 0);
+        return { score, list: r.sort((a, b) => b.w - a.w) };
       };
       const pool = m.completed && winner ? m.players.filter((p) => p.team !== winner) : m.players;
       let worst = null;
       pool.forEach((p) => {
         const rs = reasonsOf(p);
-        const ts = rs.reduce((x, y) => x + y.w, 0);
-        if (!worst || ts > worst.ts) worst = { p: p.p, ts, reasons: rs.slice(0, 3).map((x) => x.t) };
+        if (!worst || rs.score > worst.ts) worst = { p: p.p, ts: rs.score, reasons: rs.list.slice(0, 3).map((x) => x.t) };
       });
       if (worst && worst.ts > 0) {
         m._throw = worst;
