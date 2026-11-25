@@ -287,10 +287,10 @@
         const base = 20 * (1 - imp); // ortalamanın altı ceza, üstü artı
         if (imp < 0.9) r.push({ w: base, t: `lobi ortalamasının %${Math.round((1 - imp) * 100)} altında oynadı (${p.k} kill)` });
         if (e.critFd) r.push({ w: 2 * e.critFd, t: `${e.critTxt}'de ilk kanı verdi` });
-        if (e.fd >= 3) r.push({ w: 0.6 * e.fd * per20, t: `${e.fd} raundda ilk ölen oldu` });
-        if (e.iso / deaths >= 0.3 && e.iso >= 3) r.push({ w: 4 * (e.iso / deaths), t: `ölümlerinin %${Math.round((100 * e.iso) / deaths)}'inde takımından uzakta tek başınaydı` });
-        if (e.untraded / deaths >= 0.8 && e.untraded >= 5) r.push({ w: 2 * (e.untraded / deaths), t: `${e.untraded} ölümünün intikamı alınmadı` });
-        if (e.clutchLost >= 2) r.push({ w: 0.8 * e.clutchLost, t: `${e.clutchLost} clutch kaybetti` });
+        if (e.fd >= 2) r.push({ w: 0.8 * e.fd * per20, t: `${e.fd} raundda ilk ölen oldu` });
+        if (e.iso / deaths >= 0.25 && e.iso >= 2) r.push({ w: 7 * (e.iso / deaths), t: `ölümlerinin %${Math.round((100 * e.iso) / deaths)}'inde takımından uzakta tek başınaydı` });
+        if (e.untraded / deaths >= 0.7 && e.untraded >= 4) r.push({ w: 3 * (e.untraded / deaths), t: `${e.untraded} ölümünün intikamı alınmadı` });
+        if (e.clutchLost >= 1) r.push({ w: 1.3 * e.clutchLost, t: `${e.clutchLost} clutch kaybetti` });
         const score = (imp < 0.9 ? 0 : base) + r.reduce((x, y) => x + y.w, 0);
         return { score, list: r.sort((a, b) => b.w - a.w) };
       };
