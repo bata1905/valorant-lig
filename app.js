@@ -113,6 +113,8 @@ async function init() {
     const ids = new Set(d.matches.map((m) => m.id));
     (extra.matches || []).forEach((m) => { if (!ids.has(m.id)) d.matches.push(m); });
     S.data = d; S.cfg = cfg;
+    // Çok küçük maçlar (3v3 gibi) lige sayılmaz; 4v3 ve üstü sayılır
+    d.matches = d.matches.filter((m) => m.players.length >= (cfg.min_players || 7));
     applyAliases(d.matches, cfg.aliases || {});
   } catch (e) {
     app.innerHTML = '<div class="loading">Veri henüz yok. Toplayıcı ilk kez çalıştığında burada görünecek.</div>';
