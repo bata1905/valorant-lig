@@ -275,7 +275,7 @@ function vPlayer(id) {
     ${fmProfile(p)}
     <div class="card section" style="margin-bottom:16px"><h3>Puan gidişatı</h3>${ratingChart(p)}</div>
     <div class="grid g4">
-      ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Pusu kill', p.ambush || 0], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
+      ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Fare (kamp) kill', p.ambush || 0], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
     </div>
     ${duelCards(p)}
     ${econCards(p)}
@@ -353,7 +353,7 @@ function playerBadges(p) {
   add(top((x) => x.weapons.Operator || 0).puuid === p.puuid && (p.weapons.Operator || 0) > 0, '🔭 Op\'çu');
   add(top((x) => x.weapons.Sheriff || 0).puuid === p.puuid && (p.weapons.Sheriff || 0) > 0, '🤠 Şerif');
   add(top((x) => x.adr).puuid === p.puuid, '💥 Hasar makinesi');
-  add(top((x) => x.ambush || 0).puuid === p.puuid && (p.ambush || 0) > 0, `🐀 Fare (en çok pusu kill: ${p.ambush})`);
+  add(top((x) => x.ambush || 0).puuid === p.puuid && (p.ambush || 0) > 0, `🐀 Fare (en çok kamp kill: ${p.ambush})`);
   add(p.aces > 0, `🃏 Ace × ${p.aces}`);
   add(p.bestWinStreak >= 3, `🔥 ${p.bestWinStreak} maçlık galibiyet serisi`);
   add(p.streak <= -3, `🥶 ${-p.streak} maçtır kazanamıyor`);
@@ -404,7 +404,7 @@ const ATTR_HELP = {
   'Nişancılık': 'Kafa vuruşu yüzdesi', 'Öldürücülük': 'Raund başına kill', 'Hasar': 'Raund başına hasar',
   'Uzun menzil': 'Operator, Marshal, Outlaw ve Guardian ile alınan kill payı', 'Tabanca': 'Tabancalarla alınan kill payı',
   'Giriş': 'Raund başına ilk kan', 'Soğukkanlılık': 'Clutch kazanma oranı', 'Hayatta kalma': 'Raund başına ne kadar az öldüğü',
-  'Pozisyon alma': 'Takımından uzakta yalnız ölmeme', 'Sinsilik': 'Takımından 25 metreden uzakta, tek başına pusudan aldığı kill payı',
+  'Pozisyon alma': 'Takımından uzakta yalnız ölmeme', 'Sinsilik': 'Bir köşede en az 8 sn bekleyip aldığı (kamp) kill payı',
   'Takım oyunu': 'Asist ve KAST birlikte: kill almasan da raunda katkı yapıyor musun', 'KAST': 'Katkı yaptığı raund yüzdesi', 'Destek bekleme': 'Ölümlerinin ne kadarının intikamı alındığı',
   'Ekonomi': 'Daha ucuz silahla pahalı rakibi öldürme', 'Tutarlılık': 'Kendi ortalamanın altına ne kadar az düştüğün. Çok iyi maçlar ceza getirmez', 'Kazanma': 'Kazanma yüzdesi',
 };
@@ -435,7 +435,7 @@ function matchRating(imp) { return Math.max(4, Math.min(10, 6.5 + (imp - 1) * 4)
 function roleOf(at) {
   const roles = [
     ['Giriş oyuncusu', at['Giriş'] * 2 + at['Öldürücülük']],
-    ['Fare (lurker)', at['Sinsilik'] * 2 + at['Pozisyon alma'] * 0.2],
+    ['Fare (kampçı)', at['Sinsilik'] * 2 + at['Pozisyon alma'] * 0.2],
     ['Keskin nişancı', at['Uzun menzil'] * 2 + at['Nişancılık']],
     ['Destekçi', at['Takım oyunu'] * 2 + at['KAST']],
     ['Çapa', at['Hayatta kalma'] * 2 + at['Pozisyon alma']],
@@ -444,7 +444,7 @@ function roleOf(at) {
 }
 function traitsOf(p, at) {
   const t = [];
-  if (at['Sinsilik'] >= 16) t.push('Arkadan dolanmayı sever');
+  if (at['Sinsilik'] >= 16) t.push('Köşede bekler, gelene sıkar');
   if (at['Uzun menzil'] >= 16) t.push("Op'u bırakmaz");
   if (at['Giriş'] >= 16) t.push('Siteye ilk o girer');
   if (at['Tabanca'] >= 16) t.push('Tabanca raundlarında tehlikeli');
@@ -889,7 +889,7 @@ function vRecords() {
     <h2 class="section">Kariyer</h2>
     <div class="grid g3">
       ${career('Toplam kill', (p) => p.kills)}${career('Ace', (p) => p.aces)}${career('Clutch kazanılan', (p) => p.clutchWon)}
-      ${career('Fare (pusu kill)', (p) => p.ambush || 0)}${career('Takımı sırtlayan', (p) => p.carries || 0)}${career('Maçı satan', (p) => p.throws || 0)}${career('İlk kan', (p) => p.fb)}
+      ${career('Fare (kamp kill)', (p) => p.ambush || 0)}${career('Takımı sırtlayan', (p) => p.carries || 0)}${career('Maçı satan', (p) => p.throws || 0)}${career('İlk kan', (p) => p.fb)}
       ${career('Eko kill', (p) => p.ecoKills)}${career('Spike kuran', (p) => p.plants)}
       ${career('Operator kill', (p) => p.weapons.Operator || 0)}${career('Sheriff kill', (p) => p.weapons.Sheriff || 0)}${career('Bıçak kill', (p) => p.weapons['Bıçak'] || 0)}
       ${career('Trade kill', (p) => p.tradeKills || 0)}${career('Hasar farkı (raund başı)', (p) => p.dmgDelta, (v) => (v >= 0 ? '+' : '') + f0(v))}${career('İlk düello kazanma', (p) => (p.fbPct == null ? 0 : p.fbPct), pct)}

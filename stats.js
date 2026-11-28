@@ -4,6 +4,8 @@
   const RATING_SCALE = 50; // lobi ortalamasının %10 üstü = +5 puan
   const WIN_BONUS = 10; // güçlü takımı yenen ~+8, favori olarak kazanan ~+2
   const ISO_DIST = 2500; // ~25 metre: en yakın takım arkadaşından bu kadar uzakta ölmek 'yalnız ölüm'
+  const CAMP_DIST = 350; // ~3.5 metre: bu kadar içinde kalmak 'aynı yerde bekliyor' sayılır
+  const CAMP_MS = 8000; // en az 8 saniye aynı yerde bekleyip alınan kill = fare (kamp) kill
   const TRADE_MS = 5000;
 
   function emptyPlayer(p) {
@@ -133,6 +135,28 @@
       const byRound = {};
       m._wk = {};
       m.players.forEach((p) => (m._wk[p.p] = 0));
+      // Kamp (fare) tespiti için: her kill anında herkesin konumu, raund raund
+      const snaps = {};
+      m.kills.forEach((k) => {
+        if (!k.pl || !k.pl.length) return;
+        const pos = {};
+        k.pl.forEach(([i, x, y]) => { const pp = m.players[i]; if (pp) pos[pp.p] = [x, y]; });
+        (snaps[k.r] = snaps[k.r] || []).push({ t: k.t, pos });
+      });
+      Object.values(snaps).forEach((l) => l.sort((a, b) => a.t - b.t));
+      const campMs = (k) => {
+        const l = snaps[k.r];
+        if (!l || k.kx == null) return 0;
+        let t0 = k.t;
+        for (let i = l.length - 1; i >= 0; i--) {
+          const sn = l[i];
+          if (sn.t >= k.t) continue;
+          const q = sn.pos[k.k];
+          if (!q || Math.hypot(q[0] - k.kx, q[1] - k.ky) > CAMP_DIST) break;
+          t0 = sn.t;
+        }
+        return k.t - t0;
+      };
       for (const k of m.kills) {
         (byRound[k.r] = byRound[k.r] || []).push(k);
         weaponTotals[k.w] = weaponTotals[k.w] || { kills: 0, by: {} };
@@ -142,8 +166,9 @@
           if (teamOf[k.k] !== teamOf[k.v]) {
             m._wk[k.k] += vw ? vw[k.v] || 1 : 1;
             const s = P[k.k];
-            // Pusu (fare) kill: katil, en yakın takım arkadaşından 25 metreden uzakta tek başına
-            if (k.knd != null && k.knd > ISO_DIST) {
+            // Fare (kamp) kill: katil en az CAMP_MS boyunca aynı yerde (3.5 m içinde) bekleyip öldürdü.
+            // Konumları sadece kill anlarında biliyoruz; o raundda daha önce başka kill olduysa ölçülebiliyor.
+            if (campMs(k) >= CAMP_MS) {
               s.ambush = (s.ambush || 0) + 1;
               k._ambush = true;
             }

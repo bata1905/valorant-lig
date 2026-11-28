@@ -62,7 +62,7 @@ function awardsHtml(night, ms) {
     item('🧯', 'Gecenin satıcısı', pLink(a.seller.p), a.seller.n ? `${a.seller.n} maçta "maçı satan" seçildi` : `gecenin en düşük etkisi, ${f2(a.seller.v)}`),
     a.bestRound ? item('💥', 'En iyi raund', pLink(a.bestRound.p), `${roundLabel(a.bestRound)}, ${multiName(a.bestRound.n)}`) : '',
     a.absurd ? item('🤡', 'En saçma ölüm', pLink(a.absurd.v), `${f0(a.absurd.b)} kredilik ekipmanla, ${f0(a.absurd.a)} kredilik ${pLink(a.absurd.k)}'a ${esc(weaponLabel(a.absurd.w))} ile öldü (${roundLabel(a.absurd)})`) : '',
-    a.rat ? item('🐀', 'Gecenin faresi', pLink(a.rat.p), `${a.rat.n} pusu kill`) : '',
+    a.rat ? item('🐀', 'Gecenin faresi', pLink(a.rat.p), `${a.rat.n} kamp kill`) : '',
   ].join('');
   return `<section class="section awards-wrap" aria-label="Gecenin ödülleri">
     <div class="awards-head"><h2>Gecenin ödülleri</h2>
@@ -93,7 +93,7 @@ function nightText(night, ms, a) {
     lines.push(`🧯 Satıcı: ${nm(a.seller.p)}`);
     if (a.bestRound) lines.push(`💥 En iyi raund: ${nm(a.bestRound.p)}, ${a.bestRound.m.map} ${a.bestRound.r + 1}. raund ${multiName(a.bestRound.n)}`);
     if (a.absurd) lines.push(`🤡 En saçma ölüm: ${nm(a.absurd.v)}, ${nm(a.absurd.k)}'a ${weaponLabel(a.absurd.w)} ile öldü`);
-    if (a.rat) lines.push(`🐀 Fare: ${nm(a.rat.p)} (${a.rat.n} pusu kill)`);
+    if (a.rat) lines.push(`🐀 Fare: ${nm(a.rat.p)} (${a.rat.n} kamp kill)`);
   }
   if (ds.length) {
     lines.push('');
@@ -167,7 +167,7 @@ function badgeCollection(p) {
     ['🏆', 'Gecenin MVP\'si', 'Bir gecenin en yüksek ortalama etkisi', mvp],
     ['💥', 'Gecenin raundu', 'Bir gecenin en çok kill alınan raundu', best],
     ['🎒', 'Sırtlayan', 'Kaybeden ya da kazanan takımı sırtla', p.carries || 0],
-    ['🐀', 'Pusucu', '25 metreden uzakta, tek başına aldığın kill', p.ambush || 0],
+    ['🐀', 'Fare', 'En az 8 sn aynı yerde bekleyip aldığın kill', p.ambush || 0],
     ['🔫', 'Tabanca raundu', 'Tabanca raundunda alınan kill', p.pistolRoundKills || 0],
     ['💸', 'Eko kill', 'Rakibin ekipmanının yarısından ucuzla kill', p.ecoKills],
     ['💣', 'Spike kuran', 'Spike kur', p.plants],
