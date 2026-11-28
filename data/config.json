@@ -49,5 +49,11 @@
   "team_adjust": {},
   "player_photos": {
     "Bata1905#1905": "assets/bata1905.jpg"
+  },
+  "card_looks": {
+    "PUNISHER#WBHA": {
+      "color": "#ff4655",
+      "style": "hud"
+    }
   }
 }
