@@ -489,7 +489,7 @@ function fmProfile(p) {
     </div>
     <div class="fm-attrs">${ATTR_GROUPS.map(([g, list]) => `<div class="fm-group"><h3>${g}</h3>${list.map((a) => `<div class="fm-row" title="${esc(ATTR_HELP[a])}"><span>${a}</span><b class="${attrCls(at[a])}">${at[a]}</b></div>`).join('')}</div>`).join('')}</div>
   </div>
-  <p class="muted" style="font-size:13px;margin-top:8px">Özellikler 1-20 arası, ligdeki diğer oyunculara göre hesaplanır. 20 en iyisi demek. Bir özelliğin üstüne gelince neyi ölçtüğü görünür.</p>`;
+  <p class="muted" style="font-size:13px;margin-top:8px">Özellikler 1-20 arası, ligdeki diğer oyunculara göre hesaplanır. 20 en iyisi demek. Altı noktalı çizili her terime dokununca ne anlama geldiği açılır.</p>`;
 }
 
 // ---------- Isı haritası ----------
