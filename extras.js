@@ -194,3 +194,204 @@ function fathersHtml(ps) {
     <p class="lead">Birbirlerine karşı belirgin üstünlüğü olan ikililer (en az 6 kill fark ve 1.6 kat).</p>
     <div class="grid g3">${out.slice(0, 12).map((x) => `<div class="card father"><div>${pLink(x.hi.puuid)} <span class="muted">→</span> ${pLink(x.lo.puuid)}</div><div class="sc"><span class="teal">${x.hk}</span><span class="dim">-</span><span class="red">${x.lk}</span></div></div>`).join('')}</div>`;
 }
+
+// ---------- Düellolar, trade ve hasar farkı ----------
+function duelCards(p) {
+  const fb = p.fb, fdT = p.fdTraded || 0, fdU = Math.max(0, p.fd - fdT), tot = fb + p.fd;
+  const w = (n) => (tot ? (100 * n) / tot : 0);
+  const per = (n) => f1(n / Math.max(1, p.games));
+  return `<h2 class="section">Düellolar ve trade</h2>
+    <div class="card" style="margin-bottom:12px"><h3>İlk düellolar (${tot})</h3>
+        <div class="duelbar" role="img" aria-label="İlk düello dağılımı">
+          <span class="dw" style="width:${w(fb)}%"></span><span class="dt" style="width:${w(fdT)}%"></span><span class="du" style="width:${w(fdU)}%"></span>
+        </div>
+        <div class="legend"><span><i style="background:var(--win)"></i>Kazandı ${fb} (${pct(w(fb))})</span><span><i style="background:#ffb238"></i>Öldü, intikamı alındı ${fdT}</span><span><i style="background:var(--loss)"></i>Öldü, intikamı alınmadı ${fdU}</span></div>
+    </div>
+      <div class="grid g4">
+        <div class="card stat"><span class="l">Trade kill</span><span class="v">${p.tradeKills || 0}</span><span class="muted">maç başına ${per(p.tradeKills || 0)}, arkadaşının katilini 5 sn içinde vurdu</span></div>
+        <div class="card stat"><span class="l">İntikamı alınan ölüm</span><span class="v">${pct(p.tradePct)}</span><span class="muted">öldüğünde takımın hemen karşılık verdi</span></div>
+        <div class="card stat"><span class="l">Hasar farkı</span><span class="v ${p.dmgDelta >= 0 ? 'up' : 'down'}">${p.dmgDelta >= 0 ? '+' : ''}${f0(p.dmgDelta)}</span><span class="muted">raund başına verilen eksi alınan hasar</span></div>
+        <div class="card stat"><span class="l">İlk düello kazanma</span><span class="v">${pct(p.fbPct)}</span><span class="muted">raundun ilk çatışması</span></div>
+      </div>`;
+}
+
+// ---------- En iyi / en kötü arkadaş ----------
+function friendsOf(p, minG = 3) {
+  const list = Object.entries(p.mates || {}).filter(([, x]) => x.g >= minG).map(([id, x]) => ({ id, g: x.g, w: x.w, wp: (100 * x.w) / x.g }));
+  if (!list.length) return null;
+  list.sort((a, b) => b.wp - a.wp || b.g - a.g);
+  const best = list[0];
+  const worst = list.slice().sort((a, b) => a.wp - b.wp || b.g - a.g)[0];
+  return { best, worst: worst.id !== best.id ? worst : null };
+}
+function friendCards(p) {
+  const f = friendsOf(p);
+  if (!f) return '';
+  const c = (t, x, cls) => `<div class="card"><h3>${t}</h3><div class="stat"><span class="v">${pLink(x.id)}</span><span class="muted">aynı takımda ${x.g} maç, <b class="${cls}">${pct(x.wp)}</b> kazanma (${x.w}-${x.g - x.w})</span></div></div>`;
+  return `<div class="grid g2 section">${c('En iyi arkadaşın', f.best, 'up')}${f.worst ? c('En kötü arkadaşın', f.worst, 'down') : ''}</div>`;
+}
+
+// ---------- Haritaya göre en iyi ajan ----------
+function mapAgentTable(p) {
+  const rows = [];
+  Object.entries(p.mapAgents || {}).forEach(([map, ags]) => {
+    const list = Object.entries(ags).map(([ag, x]) => ({ ag, ...x, acs: x.score / Math.max(1, x.rounds) }));
+    // en az 2 maç oynanan ajanlar arasından en yüksek ACS; yoksa en çok oynanan
+    const pool = list.filter((x) => x.g >= 2);
+    const best = (pool.length ? pool : list).sort((a, b) => (pool.length ? b.acs - a.acs : b.g - a.g))[0];
+    if (best) rows.push({ map, ag: best.ag, g: best.g, w: best.w, acs: best.acs, kd: best.k / Math.max(1, best.d), n: list.length });
+  });
+  if (!rows.length) return '';
+  return `<div class="card tight section"><div style="padding:14px 16px 0"><h3>Haritaya göre en iyi ajanın</h3><p class="muted" style="margin:0 0 6px">O haritada en az 2 maç oynadığın ajanlar arasından en yüksek ACS.</p></div>${table('pma', [
+    { key: 'map', label: 'Harita', cls: 'l' },
+    { key: 'ag', label: 'Ajan', cls: 'l', fmt: (r) => `<span class="pname">${agentImg(r.ag)}${esc(r.ag)}</span>` },
+    { key: 'g', label: 'Maç', fmt: (r) => `${r.g}` },
+    { key: 'wl', label: 'G-M', val: (r) => r.w - (r.g - r.w), fmt: (r) => `${r.w}-${r.g - r.w}` },
+    { key: 'acs', label: 'ACS', fmt: (r) => f0(r.acs) },
+    { key: 'kd', label: 'K/D', fmt: (r) => f2(r.kd) },
+  ], rows, { sort: 'acs' })}</div>`;
+}
+
+// ---------- Maç filtresi ----------
+function matchFilterBar() {
+  const st = (S.ui.mf = S.ui.mf || { player: '', map: '', agent: '', minK: '' });
+  const maps = Object.keys(S.st.maps).sort();
+  const agents = [...new Set(S.st.matches.flatMap((m) => m.players.map((p) => p.ag).filter(Boolean)))].sort();
+  return `<div class="filters">
+    <select id="mf-player"><option value="">Tüm oyuncular</option>${allPlayers().map((p) => `<option value="${p.puuid}" ${st.player === p.puuid ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    <select id="mf-map"><option value="">Tüm haritalar</option>${maps.map((m) => `<option ${m === st.map ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
+    <select id="mf-agent" ${st.player ? '' : 'disabled title="Önce oyuncu seç"'}><option value="">Tüm ajanlar</option>${agents.map((a) => `<option ${a === st.agent ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+    <select id="mf-k" ${st.player ? '' : 'disabled title="Önce oyuncu seç"'}><option value="">Kill sınırı yok</option>${[15, 20, 25, 30, 35].map((k) => `<option value="${k}" ${String(k) === String(st.minK) ? 'selected' : ''}>${k}+ kill</option>`).join('')}</select>
+    ${st.player || st.map ? '<button class="btn ghost" id="mf-clear" type="button">Temizle</button>' : ''}
+  </div>`;
+}
+function matchFilterApply(ms) {
+  const st = S.ui.mf || {};
+  return ms.filter((m) => {
+    if (st.map && m.map !== st.map) return false;
+    if (st.player) {
+      const me = m.players.find((p) => p.p === st.player);
+      if (!me) return false;
+      if (st.agent && me.ag !== st.agent) return false;
+      if (st.minK && me.k < +st.minK) return false;
+    }
+    return true;
+  });
+}
+function wireMatchFilter(rerender) {
+  const st = S.ui.mf;
+  [['mf-player', 'player'], ['mf-map', 'map'], ['mf-agent', 'agent'], ['mf-k', 'minK']].forEach(([id, k]) => {
+    const el = document.getElementById(id);
+    if (el) el.onchange = () => { st[k] = el.value; if (k === 'player' && !el.value) { st.agent = ''; st.minK = ''; } rerender(); };
+  });
+  const c = document.getElementById('mf-clear');
+  if (c) c.onclick = () => { S.ui.mf = { player: '', map: '', agent: '', minK: '' }; rerender(); };
+}
+
+// ---------- Ay özeti kartı (WhatsApp'a görsel) ----------
+const monthKey = (iso) => nightKeyTR(iso).slice(0, 7);
+function nightKeyTR(iso) { return V.nightKey(iso); }
+const monthName = (key) => new Date(key + '-15T12:00:00Z').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+function monthsOf(p) {
+  return [...new Set(S.st.matches.filter((m) => m.players.some((x) => x.p === p.puuid)).map((m) => monthKey(m.start)))].sort().reverse();
+}
+function wrappedData(p, month) {
+  const ms = S.st.matches.filter((m) => monthKey(m.start) === month && m.players.some((x) => x.p === p.puuid));
+  let w = 0, l = 0, k = 0, d = 0, a = 0, imp = 0, best = null;
+  const victims = {}, killers = {}, mates = {}, maps = {}, weapons = {};
+  ms.forEach((m) => {
+    const me = m.players.find((x) => x.p === p.puuid);
+    k += me.k; d += me.d; a += me.a;
+    const v = (m._impact || {})[p.puuid] || 1; imp += v;
+    if (!best || v > best.v) best = { v, m, me };
+    if (m.completed || m.ff) { if (m._winner === me.team) w++; else l++; }
+    maps[m.map] = (maps[m.map] || 0) + 1;
+    const team = {}; m.players.forEach((x) => (team[x.p] = x.team));
+    m.players.forEach((x) => { if (x.p !== p.puuid && x.team === me.team) { const t = (mates[x.p] = mates[x.p] || { g: 0, w: 0 }); t.g++; if (m._winner === me.team) t.w++; } });
+    m.kills.forEach((kk) => {
+      if (!kk.k || team[kk.k] === team[kk.v]) return;
+      if (kk.k === p.puuid) { victims[kk.v] = (victims[kk.v] || 0) + 1; weapons[kk.w] = (weapons[kk.w] || 0) + 1; }
+      if (kk.v === p.puuid) killers[kk.k] = (killers[kk.k] || 0) + 1;
+    });
+  });
+  const top = (o) => Object.entries(o).sort((x, y) => y[1] - x[1])[0];
+  const mateList = Object.entries(mates).filter(([, x]) => x.g >= 2).map(([id, x]) => ({ id, ...x, wp: x.w / x.g })).sort((x, y) => y.wp - x.wp || y.g - x.g);
+  return { ms, w, l, k, d, a, imp: imp / Math.max(1, ms.length), best, victim: top(victims), killer: top(killers), mate: mateList[0], map: top(maps), weapon: top(weapons) };
+}
+function wrappedBlock(p) {
+  const months = monthsOf(p);
+  if (!months.length) return '';
+  const st = (S.ui.wr = S.ui.wr || {});
+  if (!st.month || !months.includes(st.month)) st.month = months[0];
+  return `<h2 class="section">Ay özeti kartı</h2>
+    <div class="card"><div class="filters">
+      <select id="wr-month">${months.map((m) => `<option value="${m}" ${m === st.month ? 'selected' : ''}>${esc(monthName(m))}</option>`).join('')}</select>
+      <button class="btn wa" id="wr-share" type="button">Kartı paylaş</button>
+      <button class="btn ghost" id="wr-dl" type="button">İndir</button>
+    </div>
+    <canvas id="wr-cv" width="1080" height="1350" class="wrapped" role="img" aria-label="${esc(p.name)} ay özeti kartı"></canvas></div>`;
+}
+function drawWrapped(p) {
+  const cv = document.getElementById('wr-cv');
+  if (!cv) return;
+  const st = S.ui.wr, D = wrappedData(p, st.month);
+  const c = cv.getContext('2d');
+  const W = 1080, H = 1350, RED = '#ff4655', TEAL = '#3fe0b0', TXT = '#ece8e1', MUT = '#96a3ad';
+  const disp = '"Big Shoulders Display", "Barlow", sans-serif', body = '"Barlow", system-ui, sans-serif';
+  c.fillStyle = '#0f1923'; c.fillRect(0, 0, W, H);
+  // kesik kırmızı şerit
+  c.fillStyle = 'rgba(255,70,85,.10)'; c.beginPath(); c.moveTo(640, 0); c.lineTo(W, 0); c.lineTo(W, 520); c.closePath(); c.fill();
+  c.fillStyle = RED; c.fillRect(70, 80, 18, 70);
+  c.fillStyle = MUT; c.font = `600 30px ${body}`; c.fillText('CUSTOM LEAGUE', 110, 108);
+  c.fillStyle = TXT; c.font = `600 30px ${body}`; c.fillText(monthName(st.month).toLocaleUpperCase('tr-TR'), 110, 146);
+  c.fillStyle = TXT; c.font = `900 132px ${disp}`;
+  let nameSize = 132; while (c.measureText(p.name.toLocaleUpperCase('tr-TR')).width > W - 140 && nameSize > 60) { nameSize -= 6; c.font = `900 ${nameSize}px ${disp}`; }
+  c.fillText(p.name.toLocaleUpperCase('tr-TR'), 70, 300);
+  // büyük sayılar
+  const big = (x, label, val, col) => { c.fillStyle = col || TXT; c.font = `900 110px ${disp}`; c.fillText(val, x, 470); c.fillStyle = MUT; c.font = `600 26px ${body}`; c.fillText(label, x, 510); };
+  big(70, 'MAÇ', String(D.ms.length));
+  big(330, 'GALİBİYET-MAĞLUBİYET', `${D.w}-${D.l}`, D.w >= D.l ? TEAL : RED);
+  big(760, 'ORT. ETKİ', f2(D.imp), RED);
+  c.strokeStyle = '#2c4152'; c.lineWidth = 2; c.beginPath(); c.moveTo(70, 570); c.lineTo(W - 70, 570); c.stroke();
+  // satırlar
+  const rows = [
+    ['K / D / A', `${D.k} / ${D.d} / ${D.a}`],
+    ['En iyi maçı', D.best ? `${D.best.m.map}, ${D.best.me.k} kill, etki ${f2(D.best.v)}` : '–'],
+    ['En çok öldürdüğü', D.victim ? `${nm(D.victim[0])} (${D.victim[1]})` : '–'],
+    ['Onu en çok öldüren', D.killer ? `${nm(D.killer[0])} (${D.killer[1]})` : '–'],
+    ['En iyi arkadaşı', D.mate ? `${nm(D.mate.id)} (${Math.round(100 * D.mate.wp)}%, ${D.mate.g} maç)` : '–'],
+    ['En sevdiği silah', D.weapon ? `${D.weapon[0]} (${D.weapon[1]} kill)` : '–'],
+    ['En çok oynadığı harita', D.map ? `${D.map[0]} (${D.map[1]} maç)` : '–'],
+  ];
+  rows.forEach(([l, v], i) => {
+    const y = 650 + i * 92;
+    c.fillStyle = MUT; c.font = `600 26px ${body}`; c.fillText(l.toLocaleUpperCase('tr-TR'), 70, y);
+    c.fillStyle = TXT; c.font = `700 40px ${body}`;
+    let t = v; while (c.measureText(t).width > W - 140 && t.length > 4) t = t.slice(0, -2);
+    c.fillText(t === v ? v : t + '…', 70, y + 46);
+  });
+  c.fillStyle = MUT; c.font = `500 24px ${body}`; c.fillText(location.host + location.pathname, 70, H - 60);
+}
+function wireWrapped(p) {
+  const cv = document.getElementById('wr-cv');
+  if (!cv) return;
+  const draw = () => drawWrapped(p);
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(draw);
+  draw();
+  document.getElementById('wr-month').onchange = (e) => { S.ui.wr.month = e.target.value; draw(); };
+  const file = () => `${p.name}-${S.ui.wr.month}.png`.replace(/[^\w.-]+/g, '_');
+  document.getElementById('wr-dl').onclick = () => { const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = file(); a.click(); };
+  document.getElementById('wr-share').onclick = () => cv.toBlob(async (b) => {
+    const f = new File([b], file(), { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) {
+      try { await navigator.share({ files: [f], title: `${p.name}, ${monthName(S.ui.wr.month)}` }); } catch (e) {}
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = file(); a.click();
+      alertBox('Bu tarayıcı doğrudan paylaşımı desteklemiyor, kart indirildi. WhatsApp\'tan görsel olarak gönderebilirsin.');
+    }
+  }, 'image/png');
+}
+function alertBox(msg) {
+  const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg; document.body.appendChild(d);
+  setTimeout(() => d.remove(), 4500);
+}

@@ -14,7 +14,7 @@
       hs: 0, bs: 0, ls: 0, dmg: 0, dmgRecv: 0,
       fb: 0, fd: 0, kastRounds: 0, k3: 0, k4: 0, aces: 0,
       clutchAtt: 0, clutchWon: 0, plants: 0, defuses: 0,
-      ecoKills: 0, clutchBig: 0, pistolRoundKills: 0,
+      ecoKills: 0, clutchBig: 0, pistolRoundKills: 0, tradeKills: 0, tradedDeaths: 0, fdTraded: 0, mapAgents: {},
       econ: { pistol: { r: 0, k: 0, d: 0, w: 0 }, eco: { r: 0, k: 0, d: 0, w: 0 }, half: { r: 0, k: 0, d: 0, w: 0 }, full: { r: 0, k: 0, d: 0, w: 0 } },
       agents: {}, maps: {}, weapons: {}, killsOn: {}, deathsBy: {}, mates: {},
       rating: START_RATING, ratingHist: [], form: [],
@@ -113,6 +113,11 @@
         s.hs += p.hs; s.bs += p.bs; s.ls += p.ls; s.dmg += p.dd; s.dmgRecv += p.dr;
         s.matchIds.push(m.id);
         if (p.ag) s.agents[p.ag] = (s.agents[p.ag] || { g: 0, w: 0, k: 0, d: 0 }), s.agents[p.ag].g++, s.agents[p.ag].k += p.k, s.agents[p.ag].d += p.d;
+        if (p.ag) {
+          const ma = (s.mapAgents[m.map] = s.mapAgents[m.map] || {});
+          const x = (ma[p.ag] = ma[p.ag] || { g: 0, w: 0, k: 0, d: 0, score: 0, rounds: 0 });
+          x.g++; x.k += p.k; x.d += p.d; x.score += p.sc; x.rounds += roundsTotal;
+        }
         const mp = (s.maps[m.map] = s.maps[m.map] || { g: 0, w: 0, l: 0, k: 0, d: 0, score: 0, rounds: 0 });
         mp.g++; mp.k += p.k; mp.d += p.d; mp.score += p.sc; mp.rounds += roundsTotal;
         const acs = p.sc / roundsTotal;
@@ -181,8 +186,14 @@
         rk.forEach((k) => {
           if (!k.k) return;
           const revenge = rk.find((k2) => k2.v === k.k && k2.t >= k.t && k2.t - k.t <= TRADE_MS && teamOf[k2.k] === teamOf[k.v]);
-          if (revenge) traded.add(k.v);
+          if (revenge) {
+            traded.add(k.v);
+            if (P[revenge.k]) P[revenge.k].tradeKills++;
+            if (P[k.v]) P[k.v].tradedDeaths++;
+          }
         });
+        // İlk düello: ilk ölen takım arkadaşları tarafından trade edildi mi
+        if (first && P[first.v] && traded.has(first.v)) P[first.v].fdTraded++;
         for (const p of m.players) {
           const kast = killsBy[p.p] || assisted.has(p.p) || !died[p.p] || traded.has(p.p);
           if (died[p.p]) {
@@ -342,6 +353,7 @@
           s.form.push(won ? 'W' : 'L');
           s.maps[m.map][won ? 'w' : 'l']++;
           if (p.ag && s.agents[p.ag]) s.agents[p.ag].w += won ? 1 : 0;
+          if (p.ag && s.mapAgents[m.map] && s.mapAgents[m.map][p.ag]) s.mapAgents[m.map][p.ag].w += won ? 1 : 0;
           for (const q of teams[p.team]) {
             if (q.p === p.p) continue;
             const mt = (s.mates[q.p] = s.mates[q.p] || { g: 0, w: 0 });
@@ -367,6 +379,9 @@
       s.kast = (100 * s.kastRounds) / Math.max(1, s.rounds);
       s.winPct = (100 * s.wins) / Math.max(1, s.completed);
       s.kpr = s.kills / Math.max(1, s.rounds);
+      s.dmgDelta = (s.dmg - s.dmgRecv) / Math.max(1, s.rounds);
+      s.tradePct = (100 * s.tradedDeaths) / Math.max(1, s.deaths);
+      s.fbPct = s.fb + s.fd ? (100 * s.fb) / (s.fb + s.fd) : null;
       s.impact = (s.impactSum || 0) / Math.max(1, s.games);
       s.league = s.games >= minGames;
       let nem = null, vic = null;

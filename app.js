@@ -118,7 +118,8 @@ async function init() {
     (extra.matches || []).forEach((m) => { if (!ids.has(m.id)) d.matches.push(m); });
     S.data = d; S.cfg = cfg;
     // Çok küçük maçlar (3v3 gibi) lige sayılmaz; 4v3 ve üstü sayılır
-    d.matches = d.matches.filter((m) => m.players.length >= (cfg.min_players || 7));
+    // Deathmatch gibi iki takımlı olmayan modlar da sayılmaz
+    d.matches = d.matches.filter((m) => m.players.length >= (cfg.min_players || 7) && Object.keys(m.teams || {}).length === 2);
     applyAliases(d.matches, cfg.aliases || {});
   } catch (e) {
     app.innerHTML = '<div class="loading">Veri henüz yok. Toplayıcı ilk kez çalıştığında burada görünecek.</div>';
@@ -235,6 +236,9 @@ function vHome() {
     { key: 'kast', label: 'KAST', opt: true, title: 'Kill, asist, hayatta kalma veya trade olunan raund yüzdesi', fmt: (p) => pct(p.kast) },
     { key: 'fb', label: 'İlk kan', opt: true },
     { key: 'clutchWon', label: 'Clutch', opt: true },
+    { key: 'dmgDelta', label: 'Hasar farkı', opt: true, title: 'Raund başına verilen eksi alınan hasar', fmt: (p) => `<span class="${p.dmgDelta >= 0 ? 'up' : 'down'}">${p.dmgDelta >= 0 ? '+' : ''}${f0(p.dmgDelta)}</span>` },
+    { key: 'tradeKills', label: 'Trade', opt: true, title: 'Takım arkadaşının katilini 5 sn içinde öldürme' },
+    { key: 'fbPct', label: 'İlk düello', opt: true, title: 'Raundun ilk çatışmasını kazanma yüzdesi', val: (p) => (p.fbPct == null ? -1 : p.fbPct), fmt: (p) => pct(p.fbPct) },
   ];
   app.innerHTML = `${board}${last ? awardsHtml(last, lm) : ''}
     <h1>Sıralama</h1>
@@ -273,12 +277,14 @@ function vPlayer(id) {
     <div class="grid g4">
       ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Pusu kill', p.ambush || 0], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
     </div>
+    ${duelCards(p)}
     ${econCards(p)}
     <div class="section"><h2>Rozetler</h2>${badges.length ? `<div style="margin-bottom:12px">${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</div>` : ''}${badgeCollection(p)}</div>
     <div class="grid g2 section">
       <div class="card"><h3>Ezeli düşman</h3>${p.nemesis ? `<div class="stat"><span class="v">${pLink(p.nemesis.p)}</span><span class="muted">seni ${p.nemesis.n} kez öldürdü</span></div>` : '–'}</div>
       <div class="card"><h3>En sevdiğin kurban</h3>${p.victim ? `<div class="stat"><span class="v">${pLink(p.victim.p)}</span><span class="muted">${p.victim.n} kez öldürdün</span></div>` : '–'}</div>
     </div>
+    ${friendCards(p)}
     <h2 class="section">Oyunculara karşı ve birlikte</h2>
     <div class="card tight">${table('pvs', [
       { key: 'name', label: 'Oyuncu', cls: 'l', fmt: (r) => pLink(r.id) },
@@ -303,12 +309,15 @@ function vPlayer(id) {
       { key: 'a', label: 'Ajan', cls: 'l', fmt: (r) => `<span class="pname">${agentImg(r.a)}${esc(r.a)}</span>` },
       { key: 'g', label: 'Maç' }, { key: 'w', label: 'Galibiyet' }, { key: 'kd', label: 'K/D', fmt: (r) => f2(r.kd) },
     ], agentRows, { sort: 'g' })}</div>
+    ${mapAgentTable(p)}
+    ${wrappedBlock(p)}
     <h2 class="section">Isı haritası</h2>
     ${heatBlock('ph', { player: id })}
     <h2 class="section">Maçları</h2>
     <div class="grid g2">${p.matchIds.slice().reverse().map((mid) => matchCard(matchById(mid), id)).join('')}</div>`;
   wireTables(() => vPlayer(id));
   wireHeat('ph', { player: id });
+  wireWrapped(p);
 }
 
 function ratingChart(p) {
@@ -648,7 +657,15 @@ function matchCard(m, focus) {
 }
 function vMatches() {
   const nights = Object.keys(S.st.nights).sort().reverse();
-  app.innerHTML = `<h1>Maçlar</h1>` + nights.map((n) => `<h3 class="section">${esc(nightTR(n))}</h3><div class="grid g2">${S.st.nights[n].slice().reverse().map((m) => matchCard(m)).join('')}</div>`).join('');
+  const focus = (S.ui.mf && S.ui.mf.player) || null;
+  let shown = 0;
+  const body = nights.map((n) => {
+    const ms = matchFilterApply(S.st.nights[n]).slice().reverse();
+    shown += ms.length;
+    return ms.length ? `<h3 class="section">${esc(nightTR(n))}</h3><div class="grid g2">${ms.map((m) => matchCard(m, focus)).join('')}</div>` : '';
+  }).join('');
+  app.innerHTML = `<h1>Maçlar</h1>${matchFilterBar()}<div class="muted">${shown} maç</div>${body || '<div class="card muted section">Bu filtreye uyan maç yok.</div>'}`;
+  wireMatchFilter(vMatches);
 }
 function vMatch(id) {
   const m = matchById(id);
@@ -875,6 +892,7 @@ function vRecords() {
       ${career('Fare (pusu kill)', (p) => p.ambush || 0)}${career('Takımı sırtlayan', (p) => p.carries || 0)}${career('Maçı satan', (p) => p.throws || 0)}${career('İlk kan', (p) => p.fb)}
       ${career('Eko kill', (p) => p.ecoKills)}${career('Spike kuran', (p) => p.plants)}
       ${career('Operator kill', (p) => p.weapons.Operator || 0)}${career('Sheriff kill', (p) => p.weapons.Sheriff || 0)}${career('Bıçak kill', (p) => p.weapons['Bıçak'] || 0)}
+      ${career('Trade kill', (p) => p.tradeKills || 0)}${career('Hasar farkı (raund başı)', (p) => p.dmgDelta, (v) => (v >= 0 ? '+' : '') + f0(v))}${career('İlk düello kazanma', (p) => (p.fbPct == null ? 0 : p.fbPct), pct)}
       ${career('1v3+ clutch', (p) => p.clutchBig || 0)}${career('Tabanca raundu kill', (p) => p.pistolRoundKills || 0)}${career('Gecenin MVP\'si', (p) => Object.values(allNightAwards()).filter((a) => a && a.mvp.p === p.puuid).length)}
     </div>
     ${econTable()}`;
