@@ -126,6 +126,13 @@ async function init() {
   }
   S.st = V.compute(S.data.matches, { minGames: S.cfg.league_min_games || 3 });
   S._attrs = null; S._nightAw = null;
+  // Elle güç düzeltmesi: "isim#tag" -> OVR farkı (ör. pingli oynadığı dönem yüzünden düşük görünen oyuncu)
+  const adj = {};
+  Object.entries(S.cfg.team_adjust || {}).forEach(([key, v]) => {
+    const p = Object.values(S.st.players).find((q) => (q.name + '#' + q.tag).toLowerCase() === key.toLowerCase() || q.name.toLowerCase() === key.toLowerCase());
+    if (p) adj[p.puuid] = v;
+  });
+  V.setAdjust(adj);
   if (!S.st.matches.length) { app.innerHTML = '<div class="loading">Henüz maç yok.</div>'; return; }
   const upd = S.data.meta && S.data.meta.updated;
   document.getElementById('foot').innerHTML = `${S.st.matches.length} maç. Son güncelleme ${upd ? new Date(upd).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' }) : '–'}. Riot Games ile bağlantısı yoktur.`;
@@ -681,7 +688,7 @@ function vMatch(id) {
 }
 
 // ---------- Takım kurucu ----------
-const pow = (id) => V.ovr(S.st.players, id);
+const pow = (id) => V.teamOvr(S.st.players, id);
 function teamList(ids, cls) {
   return `<ul>${ids.map((id) => `<li>${pLink(id, true)} <span class="ovr ${ovrCls(pow(id))}" title="Genel güç (OVR)">${pow(id)}</span></li>`).join('')}</ul>`;
 }
@@ -720,7 +727,7 @@ function vTeams() {
   const opts = (chosen) => sel.map((id) => `<option value="${id}" ${id === chosen ? 'selected' : ''}>${esc(nm(id))}</option>`).join('');
 
   const picker = `<div class="card"><div class="picker">${ps.map((p) => `<label class="${st.sel.has(p.puuid) ? 'on' : ''}"><input type="checkbox" data-p="${p.puuid}" ${st.sel.has(p.puuid) ? 'checked' : ''}>${esc(p.name)} <span class="ovr ${ovrCls(pow(p.puuid))}">${pow(p.puuid)}</span></label>`).join('')}</div>
-    <div class="muted" style="margin-top:10px">${st.sel.size} oyuncu seçili. Yanındaki sayı FIFA'daki gibi genel güç (OVR): maç başına performanstan hesaplanır, 70 lig ortalaması, 99 en yüksek.</div></div>`;
+    <div class="muted" style="margin-top:10px">${st.sel.size} oyuncu seçili. Yanındaki sayı takım kurmada kullanılan güç (OVR): son maçlar daha ağır basar, 70 lig ortalaması, 99 en yüksek.</div></div>`;
 
   const modeBar = `<div class="filters section">
     <button data-mode="auto" class="${st.mode === 'auto' ? 'primary' : ''}">Otomatik dengele</button>

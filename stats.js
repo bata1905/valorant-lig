@@ -398,18 +398,32 @@
 
   // Oyuncunun gerçek gücü: maç başına Etki'den türetilir (birikmiş puan değil).
   // 1.00 etki = 1000; her 0.10 etki = 50 güç. Az maçı olanın etkisi ortalamaya çekilir.
-  function strength(P, id) {
+  function strength(P, id, half = 0) {
     const p = P[id];
-    if (!p || !p.games || !p.impact) return START_RATING;
-    const imp = (p.impact * p.games + 1 * 2) / (p.games + 2);
-    return START_RATING + 500 * (imp - 1);
+    if (!p || !p.games || !p.impact) return START_RATING + (half ? (ADJ[id] || 0) * 10 : 0);
+    // half verilirse yakın maçlar daha ağır basar (yarı ömür half maç): oyuncu gelişince ya da ping/bağlantı
+    // değişince güç hızla güncellenir. Az maçta ortalamaya (1.00) doğru çekilir.
+    const h = p.impHist || [];
+    let ws = 0, wv = 0;
+    for (let i = 0; i < h.length; i++) {
+      const w = half ? Math.pow(0.5, (h.length - 1 - i) / half) : 1;
+      ws += w; wv += w * h[i].v;
+    }
+    if (!ws) return START_RATING + (half ? (ADJ[id] || 0) * 10 : 0);
+    const imp = (wv + 1 * 2) / (ws + 2);
+    return START_RATING + 500 * (imp - 1) + (half ? (ADJ[id] || 0) * 10 : 0);
   }
   // Takım gücü: düz ortalama değil, iyi oyunculara daha çok ağırlık veren "yumuşak maksimum".
   // Geçmiş maçlarla test edildi: tek bir yıldız oyuncu takımı ortalamanın gösterdiğinden fazla taşıyor.
   // (Eski "kimin kiminle kazandığı" sinerjisi testte tahmini bozduğu için çıkarıldı.)
-  const STAR_T = 150, PROB_SCALE = 300;
+  // Takım kurarken yakın maçların yarı ömrü (maç). Sıralama bunu kullanmaz, tüm maçlar eşit sayılır.
+  let TEAM_HALF = 8;
+  // Geçmiş 31 maçla test: yıldız ağırlığı 100 ve ölçek 200 ile tahminler gerçeğe en yakın (ItzRJ'li takımlar: tahmin %71, gerçek %71)
+  let STAR_T = 100, PROB_SCALE = 200;
+  // Elle düzeltme (config.json "team_adjust": {"isim#tag": OVR}), sadece takım kurarken
+  let ADJ = {};
   function teamPower(P, pairs, t) {
-    const ss = t.map((id) => strength(P, id));
+    const ss = t.map((id) => strength(P, id, TEAM_HALF));
     const avg = ss.reduce((a, b) => a + b, 0) / (ss.length || 1);
     const soft = START_RATING + STAR_T * Math.log(ss.reduce((a, x) => a + Math.exp((x - START_RATING) / STAR_T), 0) / (ss.length || 1));
     return { avg, power: soft };
@@ -463,7 +477,7 @@
     const raw = 70 + (strength(P, id) - START_RATING) / 10;
     return raw - 10 / Math.sqrt(Math.max(1, g));
   }
-  const api = { compute, winProb, balance, synergy, nightKey, strength, matchup, ovr, ovrFrom, ovrSafe, START_RATING };
+  const api = { setAdjust: (a) => (ADJ = a || {}), teamOvr: (P, id) => ovrFrom(strength(P, id, TEAM_HALF)), setModel: (st, ps) => { STAR_T = st; PROB_SCALE = ps; }, setTeamHalf: (h) => (TEAM_HALF = h), teamHalf: () => TEAM_HALF, compute, winProb, balance, synergy, nightKey, strength, matchup, ovr, ovrFrom, ovrSafe, START_RATING };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VStats = api;
 })(typeof window !== 'undefined' ? window : globalThis);
