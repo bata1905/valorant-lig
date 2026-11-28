@@ -257,3 +257,4 @@ label.chk{display:inline-flex;gap:8px;align-items:center;color:var(--muted);font
 canvas.wrapped{width:100%;max-width:432px;height:auto;display:block;margin-top:12px;border:1px solid var(--line)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);border-left:4px solid var(--led);padding:12px 16px;max-width:90vw;z-index:50}
 .filters select:disabled{opacity:.5}
+.hero img.ph{width:96px;height:96px;object-fit:cover;object-position:50% 20%;border:2px solid var(--led)}

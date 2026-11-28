@@ -298,10 +298,11 @@ function monthsOf(p) {
 function wrappedData(p, month) {
   const ms = S.st.matches.filter((m) => monthKey(m.start) === month && m.players.some((x) => x.p === p.puuid));
   let w = 0, l = 0, k = 0, d = 0, a = 0, imp = 0, best = null;
-  const victims = {}, killers = {}, mates = {}, maps = {}, weapons = {};
+  const victims = {}, killers = {}, mates = {}, maps = {}, weapons = {}, agents = {};
   ms.forEach((m) => {
     const me = m.players.find((x) => x.p === p.puuid);
     k += me.k; d += me.d; a += me.a;
+    if (me.ag) agents[me.ag] = (agents[me.ag] || 0) + 1;
     const v = (m._impact || {})[p.puuid] || 1; imp += v;
     if (!best || v > best.v) best = { v, m, me };
     if (m.completed || m.ff) { if (m._winner === me.team) w++; else l++; }
@@ -316,7 +317,19 @@ function wrappedData(p, month) {
   });
   const top = (o) => Object.entries(o).sort((x, y) => y[1] - x[1])[0];
   const mateList = Object.entries(mates).filter(([, x]) => x.g >= 2).map(([id, x]) => ({ id, ...x, wp: x.w / x.g })).sort((x, y) => y.wp - x.wp || y.g - x.g);
-  return { ms, w, l, k, d, a, imp: imp / Math.max(1, ms.length), best, victim: top(victims), killer: top(killers), mate: mateList[0], map: top(maps), weapon: top(weapons) };
+  return { ms, w, l, k, d, a, imp: imp / Math.max(1, ms.length), best, victim: top(victims), killer: top(killers), mate: mateList[0], map: top(maps), weapon: top(weapons), agent: top(agents) };
+}
+// config.json "player_photos": {"isim#tag": "assets/players/dosya.jpg"}
+function photoOf(p) {
+  const ph = S.cfg.player_photos || {};
+  const key = Object.keys(ph).find((k) => k.toLowerCase() === (p.name + '#' + p.tag).toLowerCase() || k.toLowerCase() === p.name.toLowerCase());
+  return key ? ph[key] : null;
+}
+const _imgCache = {};
+function loadImg(src) {
+  if (!src) return Promise.resolve(null);
+  if (!_imgCache[src]) _imgCache[src] = new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  return _imgCache[src];
 }
 function wrappedBlock(p) {
   const months = monthsOf(p);
@@ -331,46 +344,100 @@ function wrappedBlock(p) {
     </div>
     <canvas id="wr-cv" width="1080" height="1350" class="wrapped" role="img" aria-label="${esc(p.name)} ay özeti kartı"></canvas></div>`;
 }
-function drawWrapped(p) {
+async function drawWrapped(p) {
   const cv = document.getElementById('wr-cv');
   if (!cv) return;
   const st = S.ui.wr, D = wrappedData(p, st.month);
+  const photo = await loadImg(photoOf(p));
+  if (!document.body.contains(cv)) return;
   const c = cv.getContext('2d');
-  const W = 1080, H = 1350, RED = '#ff4655', TEAL = '#3fe0b0', TXT = '#ece8e1', MUT = '#96a3ad';
+  const W = 1080, H = 1350, RED = '#ff4655', TEAL = '#3fe0b0', TXT = '#ece8e1', MUT = '#96a3ad', BG = '#0f1923', PANEL = '#16232f', LINE = '#2c4152';
   const disp = '"Big Shoulders Display", "Barlow", sans-serif', body = '"Barlow", system-ui, sans-serif';
-  c.fillStyle = '#0f1923'; c.fillRect(0, 0, W, H);
-  // kesik kırmızı şerit
-  c.fillStyle = 'rgba(255,70,85,.10)'; c.beginPath(); c.moveTo(640, 0); c.lineTo(W, 0); c.lineTo(W, 520); c.closePath(); c.fill();
-  c.fillStyle = RED; c.fillRect(70, 80, 18, 70);
-  c.fillStyle = MUT; c.font = `600 30px ${body}`; c.fillText('CUSTOM LEAGUE', 110, 108);
-  c.fillStyle = TXT; c.font = `600 30px ${body}`; c.fillText(monthName(st.month).toLocaleUpperCase('tr-TR'), 110, 146);
-  c.fillStyle = TXT; c.font = `900 132px ${disp}`;
-  let nameSize = 132; while (c.measureText(p.name.toLocaleUpperCase('tr-TR')).width > W - 140 && nameSize > 60) { nameSize -= 6; c.font = `900 ${nameSize}px ${disp}`; }
-  c.fillText(p.name.toLocaleUpperCase('tr-TR'), 70, 300);
-  // büyük sayılar
-  const big = (x, label, val, col) => { c.fillStyle = col || TXT; c.font = `900 110px ${disp}`; c.fillText(val, x, 470); c.fillStyle = MUT; c.font = `600 26px ${body}`; c.fillText(label, x, 510); };
-  big(70, 'MAÇ', String(D.ms.length));
-  big(330, 'GALİBİYET-MAĞLUBİYET', `${D.w}-${D.l}`, D.w >= D.l ? TEAL : RED);
-  big(760, 'ORT. ETKİ', f2(D.imp), RED);
-  c.strokeStyle = '#2c4152'; c.lineWidth = 2; c.beginPath(); c.moveTo(70, 570); c.lineTo(W - 70, 570); c.stroke();
-  // satırlar
-  const rows = [
-    ['K / D / A', `${D.k} / ${D.d} / ${D.a}`],
-    ['En iyi maçı', D.best ? `${D.best.m.map}, ${D.best.me.k} kill, etki ${f2(D.best.v)}` : '–'],
+  const up = (s) => String(s).toLocaleUpperCase('tr-TR');
+  const fit = (txt, maxW, weight, size, font, min = 18) => { let s = size; c.font = `${weight} ${s}px ${font}`; while (c.measureText(txt).width > maxW && s > min) { s -= 2; c.font = `${weight} ${s}px ${font}`; } return s; };
+  const HERO = 700;
+  c.fillStyle = BG; c.fillRect(0, 0, W, H);
+
+  // --- Üst görsel: fotoğraf varsa fotoğraf, yoksa isimden üretilmiş poster ---
+  if (photo) {
+    // Fotoğraf boyuna göre sığdırılır; dar kalırsa iki yan siyah (portre fotoğraflar için)
+    c.save(); c.beginPath(); c.rect(0, 0, W, HERO); c.clip();
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, HERO);
+    let r = HERO / photo.height;
+    if (photo.width * r > W * 0.9) r = Math.max(W / photo.width, HERO / photo.height);
+    const pw = photo.width * r, phh = photo.height * r;
+    c.drawImage(photo, (W - pw) / 2, HERO - phh, pw, phh);
+    c.restore();
+  } else {
+    const g = c.createLinearGradient(0, 0, W, HERO);
+    g.addColorStop(0, '#1e2f3d'); g.addColorStop(1, BG);
+    c.fillStyle = g; c.fillRect(0, 0, W, HERO);
+    c.save(); c.globalAlpha = 0.07; c.fillStyle = TXT;
+    const ini = up(p.name.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü0-9]/g, '').slice(0, 2) || '?');
+    c.font = `900 620px ${disp}`; c.textAlign = 'center'; c.fillText(ini, W / 2, 640); c.restore();
+    c.fillStyle = 'rgba(255,70,85,.16)'; c.beginPath(); c.moveTo(W * 0.55, 0); c.lineTo(W, 0); c.lineTo(W, HERO * 0.8); c.closePath(); c.fill();
+  }
+  // alt kısma doğru koyulaşma
+  const fade = c.createLinearGradient(0, HERO - 110, 0, HERO);
+  fade.addColorStop(0, 'rgba(15,25,35,0)'); fade.addColorStop(1, BG);
+  c.fillStyle = fade; c.fillRect(0, HERO - 110, W, 110);
+  const topFade = c.createLinearGradient(0, 0, 0, 200);
+  topFade.addColorStop(0, 'rgba(15,25,35,.75)'); topFade.addColorStop(1, 'rgba(15,25,35,0)');
+  c.fillStyle = topFade; c.fillRect(0, 0, W, 200);
+
+  // --- Sol üst: OVR rozeti (kesik köşeli) ---
+  const ovr = V.ovr(S.st.players, p.puuid);
+  let role = '';
+  try { if (p.league) role = roleOf(attrTable()[p.puuid]); } catch (e) {}
+  c.fillStyle = RED;
+  c.beginPath(); c.moveTo(60, 56); c.lineTo(250, 56); c.lineTo(250, 220); c.lineTo(226, 244); c.lineTo(60, 244); c.closePath(); c.fill();
+  c.fillStyle = '#fff'; c.textAlign = 'center';
+  c.font = `900 120px ${disp}`; c.fillText(String(ovr), 155, 178);
+  c.font = `700 22px ${body}`; c.fillText('GENEL GÜÇ', 155, 222);
+  c.textAlign = 'left';
+  // --- Sağ üst: lig ve ay ---
+  c.textAlign = 'right';
+  c.fillStyle = TXT; c.font = `800 30px ${disp}`; c.fillText('CUSTOM LEAGUE', W - 60, 92);
+  c.fillStyle = MUT; c.font = `600 26px ${body}`; c.fillText(up(monthName(st.month)), W - 60, 128);
+  if (role) { c.fillStyle = TXT; c.font = `700 24px ${body}`; c.fillText(up(role), W - 60, 164); }
+  c.textAlign = 'left';
+
+  // --- İsim ve ajan ---
+  const name = up(p.name);
+  const ns = fit(name, W - 120, 900, 124, disp, 60);
+  c.fillStyle = TXT; c.font = `900 ${ns}px ${disp}`; c.fillText(name, 60, HERO + 100);
+  c.fillStyle = RED; c.fillRect(60, HERO + 122, 120, 8);
+  c.fillStyle = MUT; c.font = `600 28px ${body}`;
+  const agTxt = D.agent ? `En çok oynadığı ajan: ` : '';
+  c.fillText(agTxt, 200, HERO + 135);
+  if (D.agent) { const w0 = c.measureText(agTxt).width; c.fillStyle = TXT; c.font = `700 28px ${body}`; c.fillText(`${D.agent[0]} (${D.agent[1]} maç)`, 200 + w0, HERO + 135); }
+
+  // --- Büyük sayılar ---
+  const Y = HERO + 165;
+  const cols = [[60, 'MAÇ', String(D.ms.length), TXT], [380, 'G - M', `${D.w}-${D.l}`, D.w >= D.l ? TEAL : RED], [700, 'ORT. ETKİ', f2(D.imp), RED]];
+  cols.forEach(([x, l, v, col]) => {
+    c.fillStyle = PANEL; c.fillRect(x, Y, 300, 130);
+    c.fillStyle = col; c.font = `900 84px ${disp}`; c.fillText(v, x + 24, Y + 86);
+    c.fillStyle = MUT; c.font = `600 22px ${body}`; c.fillText(l, x + 24, Y + 116);
+  });
+  // --- Detay kutuları (2 sütun x 3 satır) ---
+  const tiles = [
+    ['En iyi maçı', D.best ? `${D.best.m.map}, ${D.best.me.k} kill` : '–'],
+    ['En sevdiği silah', D.weapon ? `${D.weapon[0]} (${D.weapon[1]})` : '–'],
     ['En çok öldürdüğü', D.victim ? `${nm(D.victim[0])} (${D.victim[1]})` : '–'],
     ['Onu en çok öldüren', D.killer ? `${nm(D.killer[0])} (${D.killer[1]})` : '–'],
-    ['En iyi arkadaşı', D.mate ? `${nm(D.mate.id)} (${Math.round(100 * D.mate.wp)}%, ${D.mate.g} maç)` : '–'],
-    ['En sevdiği silah', D.weapon ? `${D.weapon[0]} (${D.weapon[1]} kill)` : '–'],
-    ['En çok oynadığı harita', D.map ? `${D.map[0]} (${D.map[1]} maç)` : '–'],
+    ['En iyi arkadaşı', D.mate ? `${nm(D.mate.id)} (%${Math.round(100 * D.mate.wp)})` : '–'],
+    ['K / D / A', `${D.k} / ${D.d} / ${D.a}`],
   ];
-  rows.forEach(([l, v], i) => {
-    const y = 650 + i * 92;
-    c.fillStyle = MUT; c.font = `600 26px ${body}`; c.fillText(l.toLocaleUpperCase('tr-TR'), 70, y);
-    c.fillStyle = TXT; c.font = `700 40px ${body}`;
-    let t = v; while (c.measureText(t).width > W - 140 && t.length > 4) t = t.slice(0, -2);
-    c.fillText(t === v ? v : t + '…', 70, y + 46);
+  const TY = Y + 146, TW = 470, TH = 80;
+  tiles.forEach(([l, v], i) => {
+    const x = 60 + (i % 2) * (TW + 20), y = TY + Math.floor(i / 2) * (TH + 12);
+    c.fillStyle = PANEL; c.fillRect(x, y, TW, TH);
+    c.fillStyle = RED; c.fillRect(x, y, 5, TH);
+    c.fillStyle = MUT; c.font = `600 19px ${body}`; c.fillText(up(l), x + 22, y + 29);
+    c.fillStyle = TXT; fit(v, TW - 44, 700, 30, body, 18); c.fillText(v, x + 22, y + 64);
   });
-  c.fillStyle = MUT; c.font = `500 24px ${body}`; c.fillText(location.host + location.pathname, 70, H - 60);
+  c.fillStyle = MUT; c.font = `500 20px ${body}`; c.fillText(location.host + location.pathname, 60, H - 18);
 }
 function wireWrapped(p) {
   const cv = document.getElementById('wr-cv');

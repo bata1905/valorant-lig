@@ -266,7 +266,7 @@ function vPlayer(id) {
 
   app.innerHTML = `
     <div class="hero">
-      ${p.favAgent && S.assets.agents[p.favAgent] ? `<img src="${S.assets.agents[p.favAgent].icon}">` : ''}
+      ${photoOf(p) ? `<img class="ph" src="${esc(photoOf(p))}" alt="">` : p.favAgent && S.assets.agents[p.favAgent] ? `<img src="${S.assets.agents[p.favAgent].icon}">` : ''}
       <div><h1 style="margin:0">${esc(p.name)} <span class="tag">#${esc(p.tag)}</span></h1>
       <div class="muted">${rank ? rank + '. sırada' : 'Misafir oyuncu'}, ${p.games} maç ${formHtml(p.form)}</div></div>
       <div style="margin-left:auto;text-align:right"><div class="big">${f1(safe(p.puuid))}</div><div class="muted">güç (temkinli OVR), lig puanı ${f0(p.rating)}</div></div>
