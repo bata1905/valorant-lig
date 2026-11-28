@@ -125,7 +125,7 @@ async function init() {
     return;
   }
   S.st = V.compute(S.data.matches, { minGames: S.cfg.league_min_games || 3 });
-  S._attrs = null;
+  S._attrs = null; S._nightAw = null;
   if (!S.st.matches.length) { app.innerHTML = '<div class="loading">Henüz maç yok.</div>'; return; }
   const upd = S.data.meta && S.data.meta.updated;
   document.getElementById('foot').innerHTML = `${S.st.matches.length} maç. Son güncelleme ${upd ? new Date(upd).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' }) : '–'}. Riot Games ile bağlantısı yoktur.`;
@@ -229,7 +229,7 @@ function vHome() {
     { key: 'fb', label: 'İlk kan', opt: true },
     { key: 'clutchWon', label: 'Clutch', opt: true },
   ];
-  app.innerHTML = `${board}
+  app.innerHTML = `${board}${last ? awardsHtml(last, lm) : ''}
     <h1>Sıralama</h1>
     <p class="lead">Sıralama <b>güce</b> göre: maç başına ne kadar iyi oynadığın (kill en ağırlıklı, güçlü birini öldürmek daha değerli; hasar, KAST ve ilk kan da sayılır). Az maç oynayanlardan belirsizlik payı düşülür, kendini kanıtladıkça kalkar. Böylece çok oynayan sadece çok oynadığı için, az oynayan da şans eseri iyi bir geceyle öne geçemez. Lig puanı ise maçlar boyunca biriken puan; güçlü takımı yenmek orada bonus getirir. Sıralamaya girmek için ${S.cfg.league_min_games || 5} maç gerekir.</p>
     <div class="card tight" id="tbl">${table('lb', cols, rows, { sort: 'rank', rowCls: (p) => (p.league ? '' : 'guest'), href: (p) => '#/oyuncu/' + p.puuid })}</div>`;
@@ -266,7 +266,8 @@ function vPlayer(id) {
     <div class="grid g4">
       ${[['Etki', f2(p.impact)], ['G-M', `${p.wins}-${p.losses}`], ['Kazanma', pct(p.winPct)], ['K/D', f2(p.kd)], ['ACS', f0(p.acs)], ['ADR', f0(p.adr)], ['HS%', pct(p.hsPct)], ['KAST', pct(p.kast)], ['Kill/Ölüm/Asist', `${p.kills}/${p.deaths}/${p.assists}`], ['İlk kan / İlk ölüm', `${p.fb} / ${p.fd}`], ['Clutch', `${p.clutchWon}/${p.clutchAtt}`], ['3K, 4K, ace', `${p.k3}, ${p.k4}, ${p.aces}`], ['Eko kill', p.ecoKills], ['Pusu kill', p.ambush || 0], ['Maçı sattı', p.throws || 0], ['Takımı sırtladı', p.carries || 0]].map(([l, v]) => `<div class="card stat"><span class="l">${l}</span><span class="v">${v}</span></div>`).join('')}
     </div>
-    ${badges.length ? `<div class="section"><h2>Rozetler</h2>${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</div>` : ''}
+    ${econCards(p)}
+    <div class="section"><h2>Rozetler</h2>${badges.length ? `<div style="margin-bottom:12px">${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</div>` : ''}${badgeCollection(p)}</div>
     <div class="grid g2 section">
       <div class="card"><h3>Ezeli düşman</h3>${p.nemesis ? `<div class="stat"><span class="v">${pLink(p.nemesis.p)}</span><span class="muted">seni ${p.nemesis.n} kez öldürdü</span></div>` : '–'}</div>
       <div class="card"><h3>En sevdiğin kurban</h3>${p.victim ? `<div class="stat"><span class="v">${pLink(p.victim.p)}</span><span class="muted">${p.victim.n} kez öldürdün</span></div>` : '–'}</div>
@@ -352,12 +353,13 @@ function weaponName(w) {
 // ---------- FM tarzı profil ----------
 const PISTOLS = ['Classic', 'Shorty', 'Frenzy', 'Ghost', 'Sheriff'];
 const LONG = ['Operator', 'Marshal', 'Outlaw', 'Guardian'];
-function rawAttrs(p) {
+function rawAttrs(p, ctx = { ast: 0.26, kast: 70 }) {
   const r = Math.max(1, p.rounds), k = Math.max(1, p.kills), d = Math.max(1, p.deaths);
   const sum = (list) => list.reduce((x, w) => x + (p.weapons[w] || 0), 0);
   const imps = (p.impHist || []).map((x) => x.v);
   const mean = imps.reduce((a, b) => a + b, 0) / Math.max(1, imps.length);
-  const sd = Math.sqrt(imps.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(1, imps.length));
+  // Tutarlılık: sadece ortalamanın ALTINA düşüşler sayılır (büyük maçlar ceza getirmez), oyuncunun kendi ortalamasına oranla
+  const down = Math.sqrt(imps.reduce((a, b) => a + Math.min(0, b - mean) ** 2, 0) / Math.max(1, imps.length)) / Math.max(0.1, mean);
   return {
     'Nişancılık': p.hsPct,
     'Öldürücülük': p.kpr,
@@ -369,11 +371,11 @@ function rawAttrs(p) {
     'Hayatta kalma': -p.deaths / r,
     'Pozisyon alma': -(p.isoDeaths || 0) / d,
     'Sinsilik': (p.ambush || 0) / k,
-    'Takım oyunu': p.assists / r,
+    'Takım oyunu': (p.assists / r) / ctx.ast + p.kast / ctx.kast,
     'KAST': p.kast,
     'Destek bekleme': -(p.untraded || 0) / d,
     'Ekonomi': p.ecoKills / r,
-    'Tutarlılık': -sd,
+    'Tutarlılık': -down,
     'Kazanma': p.winPct,
   };
 }
@@ -387,13 +389,17 @@ const ATTR_HELP = {
   'Uzun menzil': 'Operator, Marshal, Outlaw ve Guardian ile alınan kill payı', 'Tabanca': 'Tabancalarla alınan kill payı',
   'Giriş': 'Raund başına ilk kan', 'Soğukkanlılık': 'Clutch kazanma oranı', 'Hayatta kalma': 'Raund başına ne kadar az öldüğü',
   'Pozisyon alma': 'Takımından uzakta yalnız ölmeme', 'Sinsilik': 'Takımından 25 metreden uzakta, tek başına pusudan aldığı kill payı',
-  'Takım oyunu': 'Raund başına asist', 'KAST': 'Katkı yaptığı raund yüzdesi', 'Destek bekleme': 'Ölümlerinin ne kadarının intikamı alındığı',
-  'Ekonomi': 'Daha ucuz silahla pahalı rakibi öldürme', 'Tutarlılık': 'Maçtan maça performansının ne kadar az oynadığı', 'Kazanma': 'Kazanma yüzdesi',
+  'Takım oyunu': 'Asist ve KAST birlikte: kill almasan da raunda katkı yapıyor musun', 'KAST': 'Katkı yaptığı raund yüzdesi', 'Destek bekleme': 'Ölümlerinin ne kadarının intikamı alındığı',
+  'Ekonomi': 'Daha ucuz silahla pahalı rakibi öldürme', 'Tutarlılık': 'Kendi ortalamanın altına ne kadar az düştüğün. Çok iyi maçlar ceza getirmez', 'Kazanma': 'Kazanma yüzdesi',
 };
 function attrTable() {
   if (S._attrs) return S._attrs;
   const L = leaguePlayers();
-  const raws = {}; L.forEach((p) => (raws[p.puuid] = rawAttrs(p)));
+  const ctx = {
+    ast: L.reduce((s, p) => s + p.assists / Math.max(1, p.rounds), 0) / Math.max(1, L.length) || 0.26,
+    kast: L.reduce((s, p) => s + p.kast, 0) / Math.max(1, L.length) || 70,
+  };
+  const raws = {}; L.forEach((p) => (raws[p.puuid] = rawAttrs(p, ctx)));
   const out = {};
   L.forEach((p) => (out[p.puuid] = {}));
   Object.keys(raws[L[0].puuid] || {}).forEach((a) => {
@@ -432,7 +438,7 @@ function traitsOf(p, at) {
   if (at['Pozisyon alma'] <= 4) t.push('Takımından kopup yalnız ölür');
   if (at['Tutarlılık'] <= 4) t.push('Bir gün kral, bir gün yok');
   if (at['Tutarlılık'] >= 17) t.push('Her maç aynı seviyede');
-  if (at['Takım oyunu'] >= 16) t.push('Asist makinesi');
+  if (at['Takım oyunu'] >= 16) t.push('Takım oyuncusu');
   if ((p.weapons.Sheriff || 0) >= 8) t.push('Sheriff ile kafa avcısı');
   return t;
 }
@@ -561,7 +567,8 @@ function vH2H() {
     </div>
     <div class="card scroll"><table class="matrix"><thead><tr><th class="nosort">Öldüren ↓ / Ölen →</th>${ps.map((p) => `<th class="nosort" title="${esc(p.name)}">${esc(p.name.slice(0, 9))}</th>`).join('')}<th class="nosort">Toplam</th></tr></thead>
     <tbody>${ps.map((a) => `<tr><th class="rowh nosort">${esc(a.name)}</th>${ps.map((b) => cell(a.puuid, b.puuid)).join('')}<td><b>${ps.reduce((s, b) => s + ((M[a.puuid + '>' + b.puuid] || {}).n || 0), 0)}</b></td></tr>`).join('')}</tbody></table></div>
-    ${detail}`;
+    ${detail}
+    ${fathersHtml(ps)}`;
   document.getElementById('fw').onchange = (e) => { st.weapon = e.target.value; vH2H(); };
   document.getElementById('fm').onchange = (e) => { st.map = e.target.value; vH2H(); };
   document.getElementById('fa').onchange = (e) => { st.all = e.target.checked; vH2H(); };
@@ -861,7 +868,10 @@ function vRecords() {
       ${career('Fare (pusu kill)', (p) => p.ambush || 0)}${career('Takımı sırtlayan', (p) => p.carries || 0)}${career('Maçı satan', (p) => p.throws || 0)}${career('İlk kan', (p) => p.fb)}
       ${career('Eko kill', (p) => p.ecoKills)}${career('Spike kuran', (p) => p.plants)}
       ${career('Operator kill', (p) => p.weapons.Operator || 0)}${career('Sheriff kill', (p) => p.weapons.Sheriff || 0)}${career('Bıçak kill', (p) => p.weapons['Bıçak'] || 0)}
-    </div>`;
+      ${career('1v3+ clutch', (p) => p.clutchBig || 0)}${career('Tabanca raundu kill', (p) => p.pistolRoundKills || 0)}${career('Gecenin MVP\'si', (p) => Object.values(allNightAwards()).filter((a) => a && a.mvp.p === p.puuid).length)}
+    </div>
+    ${econTable()}`;
+  wireTables(vRecords);
 }
 
 init();

@@ -14,7 +14,8 @@
       hs: 0, bs: 0, ls: 0, dmg: 0, dmgRecv: 0,
       fb: 0, fd: 0, kastRounds: 0, k3: 0, k4: 0, aces: 0,
       clutchAtt: 0, clutchWon: 0, plants: 0, defuses: 0,
-      ecoKills: 0,
+      ecoKills: 0, clutchBig: 0, pistolRoundKills: 0,
+      econ: { pistol: { r: 0, k: 0, d: 0, w: 0 }, eco: { r: 0, k: 0, d: 0, w: 0 }, half: { r: 0, k: 0, d: 0, w: 0 }, full: { r: 0, k: 0, d: 0, w: 0 } },
       agents: {}, maps: {}, weapons: {}, killsOn: {}, deathsBy: {}, mates: {},
       rating: START_RATING, ratingHist: [], form: [],
       streak: 0, bestWinStreak: 0, matchIds: [], best: {},
@@ -215,8 +216,18 @@
           const c = clutchOf[t];
           if (!P[c.p]) continue;
           P[c.p].clutchAtt++;
-          if (rd.w === t) { P[c.p].clutchWon++; m._extra[c.p].clutch++; }
+          if (rd.w === t) { P[c.p].clutchWon++; m._extra[c.p].clutch++; if (c.vs >= 3) P[c.p].clutchBig++; }
           else m._extra[c.p].clutchLost++;
+        }
+        // Ekonomi: oyuncunun kendi kıyafet değerine göre raund türü
+        const half = 12; // 13 kazanan maçta devre arası 12. raunddan sonra
+        for (const p of m.players) {
+          const lv = rd.lv ? rd.lv[p.p] : null;
+          const b = r === 0 || r === half ? 'pistol' : lv == null ? null : lv < 2000 ? 'eco' : lv < 3900 ? 'half' : 'full';
+          if (!b || !P[p.p]) continue;
+          const e = P[p.p].econ[b];
+          e.r++; e.k += killsBy[p.p] || 0; if (died[p.p]) e.d++; if (rd.w === p.team) e.w++;
+          if (b === 'pistol') P[p.p].pistolRoundKills += killsBy[p.p] || 0;
         }
         if (rd.w && runScore[rd.w] != null) runScore[rd.w]++;
         if (rd.ps && P[rd.ps]) P[rd.ps].plants++;
