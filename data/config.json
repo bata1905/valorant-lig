@@ -45,5 +45,8 @@
     "GsSelozZ": "selobalaban#03786",
     "Sinobutcu": "Butcu#4810"
   },
-  "min_players": 7
+  "min_players": 7,
+  "team_adjust": {
+    "selobalaban#03786": 10
+  }
 }
