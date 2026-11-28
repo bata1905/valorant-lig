@@ -187,6 +187,10 @@ def main():
         store = json.loads(MATCHES_FILE.read_text(encoding="utf-8"))
     have = {m["id"]: m for m in store.get("matches", [])}
     excluded = set(config.get("exclude_match_ids", []))
+    # Tracker'dan elle eklenen maçlar API'de yok; her seferinde boşuna sorma
+    extra_file = MATCHES_FILE.parent / "extra_matches.json"
+    if extra_file.exists():
+        excluded |= {m["id"] for m in json.loads(extra_file.read_text(encoding="utf-8")).get("matches", [])}
     before = len(have)
     changed = [False]
 
