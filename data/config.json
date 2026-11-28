@@ -46,5 +46,8 @@
     "Sinobutcu": "Butcu#4810"
   },
   "min_players": 7,
-  "team_adjust": {}
+  "team_adjust": {},
+  "player_photos": {
+    "Bata1905#1905": "assets/bata1905.jpg"
+  }
 }
