@@ -200,7 +200,10 @@ def main():
         mid = raw["metadata"]["match_id"]
         if mid in have or mid in excluded:
             return
-        have[mid] = slim(raw)
+        sm = slim(raw)
+        if len(sm.get("teams") or {}) != 2:  # deathmatch gibi takımsız modlar
+            return
+        have[mid] = sm
         print(f"  + {have[mid]['start'][:16]} {have[mid]['map']}")
 
     # 0) Eski biçimdeki kayıtları ID ile yeniden çek
