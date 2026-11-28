@@ -46,7 +46,5 @@
     "Sinobutcu": "Butcu#4810"
   },
   "min_players": 7,
-  "team_adjust": {
-    "PUNISHER#WBHA": 5
-  }
+  "team_adjust": {}
 }
