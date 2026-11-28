@@ -131,10 +131,13 @@ function annotateGlossary(root) {
       const q = document.createElement('button');
       q.type = 'button'; q.className = 'gl-q'; q.textContent = '?'; q.setAttribute('aria-label', GLOSSARY[key][0] + ' nedir?');
       q.dataset.glk = key;
+      q.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); showGlossary(key, q); });
       el.appendChild(q);
     } else {
       el.classList.add('gl');
       el.setAttribute('role', 'button'); el.setAttribute('tabindex', '0');
+      // iPhone Safari, tıklanabilir görünmeyen öğelerde dokunmayı iletmez; doğrudan dinleyici eklenir
+      el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); showGlossary(key, el); });
     }
   });
 }
@@ -161,15 +164,11 @@ function showGlossary(key, anchor) {
 function hideGlossary() { const b = document.getElementById('gl-pop'); if (b) b.hidden = true; }
 
 document.addEventListener('click', (e) => {
-  const q = e.target.closest('.gl-q');
-  if (q) { e.preventDefault(); e.stopPropagation(); showGlossary(q.dataset.glk, q); return; }
-  const el = e.target.closest('.gl');
-  if (el && !e.target.closest('a')) { e.preventDefault(); showGlossary(el.dataset.gl, el); return; }
+  if (e.target.closest('.gl-q') || e.target.closest('.gl')) return; // kendi dinleyicileri açar
   if (!e.target.closest('#gl-pop')) hideGlossary();
 }, true);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') hideGlossary();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('gl')) { e.preventDefault(); showGlossary(e.target.dataset.gl, e.target); }
 });
-window.addEventListener('scroll', hideGlossary, { passive: true });
 new MutationObserver(() => annotateGlossary(document.getElementById('app'))).observe(document.getElementById('app'), { childList: true, subtree: true });

@@ -260,12 +260,14 @@ canvas.wrapped{width:100%;max-width:432px;height:auto;display:block;margin-top:1
 .hero img.ph{width:96px;height:96px;object-fit:cover;object-position:50% 20%;border:2px solid var(--led)}
 
 /* Terim açıklamaları */
-.gl{cursor:help;text-decoration:underline dotted;text-decoration-color:rgba(150,163,173,.6);text-underline-offset:3px}
+.gl{cursor:pointer;-webkit-tap-highlight-color:rgba(255,70,85,.25);text-decoration:underline dotted;text-decoration-color:rgba(150,163,173,.6);text-underline-offset:3px}
 .gl:hover{color:var(--text);text-decoration-color:var(--led)}
-.gl-q{margin-left:5px;width:16px;height:16px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font:700 10px var(--wide);line-height:14px;padding:0;cursor:help;vertical-align:middle}
+.gl-q{margin-left:5px;width:18px;height:18px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font:700 10px var(--wide);line-height:14px;padding:0;cursor:help;vertical-align:middle}
 .gl-q:hover{border-color:var(--led);color:var(--text)}
 #gl-pop{position:fixed;z-index:60;width:340px;max-width:calc(100vw - 24px);background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--led);padding:14px 36px 14px 16px;box-shadow:0 12px 32px rgba(0,0,0,.45);text-align:left;text-transform:none;letter-spacing:0}
 #gl-pop.sheet{left:0 !important;right:0;bottom:0;top:auto !important;width:auto;max-width:none;border-left:none;border-top:4px solid var(--led);padding:18px 44px 26px 20px}
 #gl-pop .gl-t{font-family:var(--dot);font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.02em;margin-bottom:6px;color:var(--text)}
 #gl-pop .gl-b{font-size:15px;line-height:1.5;color:var(--text);font-weight:400}
 #gl-pop .gl-x{position:absolute;top:8px;right:10px;background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;line-height:1}
+
+@media (hover:none){.gl-q{width:22px;height:22px;line-height:20px;font-size:12px;border-color:var(--led);color:var(--text)}}
