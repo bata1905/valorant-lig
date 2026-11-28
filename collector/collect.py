@@ -21,7 +21,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 MATCHES_FILE = DATA / "matches.json"
 CONFIG_FILE = DATA / "config.json"
-SCHEMA = 3  # veri biçimi sürümü; eski kayıtlar yeniden çekilir
+SCHEMA = 4  # veri biçimi sürümü; eski kayıtlar yeniden çekilir
 SLEEP = 4  # istekler arası bekleme (dakikada 30 istek sınırı)
 
 KEY = os.environ.get("HENRIK_KEY", "").strip()
@@ -116,9 +116,17 @@ def slim(m):
             "df": ((defuse.get("player") or {}).get("puuid")) if defuse else None,
             "lv": lv,
         })
+    pidx = {p["p"]: i for i, p in enumerate(players)}
     kills = []
     for k in m.get("kills") or []:
         killer = (k.get("killer") or {}).get("puuid")
+        # O anda herkesin konumu: [oyuncu sırası, x, y] (kamp/fare tespiti için)
+        snap = []
+        for pl in k.get("player_locations") or []:
+            pu = (pl.get("player") or {}).get("puuid")
+            l2 = pl.get("location") or {}
+            if pu in pidx and l2.get("x") is not None:
+                snap.append([pidx[pu], round(l2["x"]), round(l2["y"])])
         loc = k.get("location") or {}
         kx = ky = None
         for pl in k.get("player_locations") or []:
@@ -156,7 +164,7 @@ def slim(m):
             "k": killer, "v": (k.get("victim") or {}).get("puuid"),
             "a": [a.get("puuid") for a in (k.get("assistants") or []) if a.get("puuid")],
             "w": wname, "wt": wtype,
-            "x": loc.get("x"), "y": loc.get("y"), "kx": kx, "ky": ky,
+            "x": loc.get("x"), "y": loc.get("y"), "kx": kx, "ky": ky, "pl": snap,
             "nd": round(nd) if nd is not None else None,
             "vv": vv, "knd": round(knd) if knd is not None else None,
         })
