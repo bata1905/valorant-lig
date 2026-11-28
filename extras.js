@@ -291,12 +291,13 @@ function wireMatchFilter(rerender) {
 // ---------- Ay özeti kartı (WhatsApp'a görsel) ----------
 const monthKey = (iso) => nightKeyTR(iso).slice(0, 7);
 function nightKeyTR(iso) { return V.nightKey(iso); }
-const monthName = (key) => new Date(key + '-15T12:00:00Z').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+const monthName = (key) => (key === 'all' ? 'Tüm zamanlar' : new Date(key + '-15T12:00:00Z').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }));
 function monthsOf(p) {
-  return [...new Set(S.st.matches.filter((m) => m.players.some((x) => x.p === p.puuid)).map((m) => monthKey(m.start)))].sort().reverse();
+  const ms = [...new Set(S.st.matches.filter((m) => m.players.some((x) => x.p === p.puuid)).map((m) => monthKey(m.start)))].sort().reverse();
+  return ms.length ? [...ms, 'all'] : ms;
 }
 function wrappedData(p, month) {
-  const ms = S.st.matches.filter((m) => monthKey(m.start) === month && m.players.some((x) => x.p === p.puuid));
+  const ms = S.st.matches.filter((m) => (month === 'all' || monthKey(m.start) === month) && m.players.some((x) => x.p === p.puuid));
   let w = 0, l = 0, k = 0, d = 0, a = 0, imp = 0, best = null;
   const victims = {}, killers = {}, mates = {}, maps = {}, weapons = {}, agents = {};
   ms.forEach((m) => {
@@ -344,6 +345,139 @@ function wrappedBlock(p) {
     </div>
     <canvas id="wr-cv" width="1080" height="1350" class="wrapped" role="img" aria-label="${esc(p.name)} ay özeti kartı"></canvas></div>`;
 }
+// Fotoğrafı olmayanlar için üst görsel. Hepsi isimden türetilir: her oyuncuda farklı, ama hep aynı.
+const ROLE_COL = { Duelist: '#ff4655', Controller: '#9b7bff', Initiator: '#3fe0b0', Sentinel: '#ffc145' };
+// Her oyuncuya ayrı renk ve çizim: isme göre sıralanınca sırası belirler, böylece kimse aynı renk+çizimi almaz
+const CARD_COLORS = ['#ff4655', '#3fe0b0', '#9b7bff', '#ffc145', '#4fa8ff', '#ff7ad9', '#a6e22e', '#ff9a3c', '#38e0e0', '#e8e8e8', '#c77dff', '#ffd166'];
+const CARD_STYLES = ['hud', 'topo', 'pusula'];
+// config.json "card_looks": {"isim#tag": {"color": "#ff4655", "style": "hud"}} ile elle seçilebilir
+function cardLook(p) {
+  const fixed = S.cfg.card_looks || {};
+  const keyOf = (x) => Object.keys(fixed).find((k) => k.toLowerCase() === (x.name + '#' + x.tag).toLowerCase() || k.toLowerCase() === x.name.toLowerCase());
+  const own = keyOf(p);
+  if (own) return { color: fixed[own].color || '#ff4655', style: fixed[own].style || 'hud' };
+  const taken = new Set(Object.values(fixed).map((v) => (v.color || '').toLowerCase()));
+  const pool = CARD_COLORS.filter((c) => !taken.has(c.toLowerCase()));
+  const names = Object.values(S.st.players).filter((x) => !keyOf(x)).map((x) => x.name.toLowerCase()).sort();
+  const i = Math.max(0, names.indexOf(p.name.toLowerCase()));
+  return { color: pool[i % pool.length], style: CARD_STYLES[i % CARD_STYLES.length] };
+}
+function heroArt(c, p, D, W, HERO, style) {
+  const BG = '#0f1923', TXT = '#ece8e1';
+  const disp = '"Big Shoulders Display", "Barlow", sans-serif';
+  const up = (x) => String(x).toLocaleUpperCase('tr-TR');
+  const agName = D.agent ? D.agent[0] : p.favAgent;
+  const roleName = agName && S.assets.agents[agName] ? S.assets.agents[agName].role : null;
+  const look = cardLook(p);
+  const acc = look.color;
+  if (style === 'auto') style = look.style;
+  let seed = 0; for (const ch of p.name) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const g = c.createLinearGradient(0, 0, W, HERO);
+  g.addColorStop(0, '#1e2f3d'); g.addColorStop(1, BG);
+  c.fillStyle = g; c.fillRect(0, 0, W, HERO);
+  c.save(); c.beginPath(); c.rect(0, 0, W, HERO - 120); c.clip();
+  const bigText = (txt, y, rot, maxW, start = 300, fill = 0.08, line = 4) => {
+    if (!txt) return;
+    c.save(); c.translate(W / 2, y); c.rotate(rot); c.textAlign = 'center';
+    let fs = start; c.font = `900 ${fs}px ${disp}`;
+    while (c.measureText(up(txt)).width > maxW && fs > 100) { fs -= 10; c.font = `900 ${fs}px ${disp}`; }
+    c.lineWidth = line; c.strokeStyle = acc; c.globalAlpha = 0.85; c.strokeText(up(txt), 0, 0);
+    c.globalAlpha = fill; c.fillStyle = acc; c.fillText(up(txt), 0, 0);
+    c.restore();
+  };
+  if (style === 'topo') {
+    // Topoğrafik harita çizgileri
+    const cx = W * (0.35 + rnd() * 0.3), cy = HERO * (0.3 + rnd() * 0.2);
+    const k1 = 2 + Math.floor(rnd() * 3), k2 = 3 + Math.floor(rnd() * 3), ph = rnd() * 6;
+    for (let i = 0; i < 26; i++) {
+      const r0 = 30 + i * 34;
+      c.beginPath();
+      for (let t = 0; t <= Math.PI * 2 + 0.01; t += 0.04) {
+        const r = r0 * (1 + 0.12 * Math.sin(k1 * t + ph + i * 0.15) + 0.07 * Math.sin(k2 * t - ph));
+        const x = cx + Math.cos(t) * r * 1.25, y = cy + Math.sin(t) * r;
+        t === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+      }
+      c.strokeStyle = i % 5 === 0 ? acc : 'rgba(236,232,225,.14)';
+      c.lineWidth = i % 5 === 0 ? 3 : 1.5; c.globalAlpha = i % 5 === 0 ? 0.7 : 1; c.stroke(); c.globalAlpha = 1;
+    }
+    c.fillStyle = acc; c.beginPath(); c.arc(cx, cy, 10, 0, Math.PI * 2); c.fill();
+    c.fillStyle = TXT; c.font = `700 22px "Barlow", sans-serif`; c.fillText(`${(cx / 10).toFixed(0)}.${(cy / 10).toFixed(0)}`, cx + 20, cy - 14);
+  } else if (style === 'hud') {
+    // Nişangâh / taktik ekran
+    const cx = W * 0.62, cy = HERO * 0.4;
+    c.strokeStyle = 'rgba(236,232,225,.08)'; c.lineWidth = 1;
+    for (let x = 0; x < W; x += 60) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, HERO); c.stroke(); }
+    for (let y = 0; y < HERO; y += 60) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+    [90, 170, 260, 360].forEach((r, i) => { c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.strokeStyle = i === 1 ? acc : 'rgba(236,232,225,.22)'; c.lineWidth = i === 1 ? 4 : 2; c.stroke(); });
+    c.strokeStyle = acc; c.lineWidth = 4;
+    [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => { c.beginPath(); c.moveTo(cx + dx * 40, cy + dy * 40); c.lineTo(cx + dx * 130, cy + dy * 130); c.stroke(); });
+    c.fillStyle = acc; c.beginPath(); c.arc(cx, cy, 8, 0, Math.PI * 2); c.fill();
+    // tarama dilimi
+    const a0 = rnd() * Math.PI * 2; const sg = c.createRadialGradient(cx, cy, 0, cx, cy, 360);
+    sg.addColorStop(0, acc + '55'); sg.addColorStop(1, acc + '00');
+    c.fillStyle = sg; c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, 360, a0, a0 + 0.7); c.closePath(); c.fill();
+    // hedef noktaları (isimden)
+    for (let i = 0; i < 6; i++) { const t = rnd() * Math.PI * 2, r = 100 + rnd() * 250; c.fillStyle = i < 2 ? acc : 'rgba(236,232,225,.5)'; c.fillRect(cx + Math.cos(t) * r - 6, cy + Math.sin(t) * r - 6, 12, 12); }
+    c.fillStyle = 'rgba(236,232,225,.6)'; c.font = `700 22px "Barlow", sans-serif`;
+    c.fillText(`HEDEF: ${up(p.name)}`, 60, 300); c.fillText(`AJAN: ${up(agName || '-')}`, 60, 332);
+  } else if (style === 'pusula') {
+    // Pusula: derece işaretleri, yön çizgileri ve rota
+    const cx = W * 0.6, cy = HERO * 0.38, R = 300;
+    c.strokeStyle = 'rgba(236,232,225,.10)'; c.lineWidth = 1;
+    for (let i = 0; i < 12; i++) { const t = (i / 12) * Math.PI * 2; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(t) * W, cy + Math.sin(t) * W); c.stroke(); }
+    [R, R * 0.72, R * 0.4].forEach((r, i) => { c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.strokeStyle = i === 0 ? acc : 'rgba(236,232,225,.25)'; c.lineWidth = i === 0 ? 4 : 2; c.globalAlpha = i === 0 ? 0.8 : 1; c.stroke(); c.globalAlpha = 1; });
+    for (let d = 0; d < 360; d += 5) {
+      const t = (d / 180) * Math.PI - Math.PI / 2, long = d % 30 === 0;
+      c.beginPath(); c.moveTo(cx + Math.cos(t) * R, cy + Math.sin(t) * R); c.lineTo(cx + Math.cos(t) * (R - (long ? 30 : 14)), cy + Math.sin(t) * (R - (long ? 30 : 14)));
+      c.strokeStyle = long ? acc : 'rgba(236,232,225,.4)'; c.lineWidth = long ? 3 : 1.5; c.stroke();
+      if (long) { c.fillStyle = 'rgba(236,232,225,.55)'; c.font = `700 20px "Barlow", sans-serif`; c.textAlign = 'center'; c.fillText(String(d), cx + Math.cos(t) * (R + 28), cy + Math.sin(t) * (R + 28) + 7); c.textAlign = 'left'; }
+    }
+    // yön oku (isimden)
+    const bearing = Math.floor(rnd() * 360), bt = (bearing / 180) * Math.PI - Math.PI / 2;
+    c.fillStyle = acc; c.beginPath();
+    c.moveTo(cx + Math.cos(bt) * (R - 40), cy + Math.sin(bt) * (R - 40));
+    c.lineTo(cx + Math.cos(bt + 2.6) * 34, cy + Math.sin(bt + 2.6) * 34);
+    c.lineTo(cx + Math.cos(bt - 2.6) * 34, cy + Math.sin(bt - 2.6) * 34); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(236,232,225,.35)'; c.beginPath();
+    c.moveTo(cx - Math.cos(bt) * (R * 0.55), cy - Math.sin(bt) * (R * 0.55));
+    c.lineTo(cx + Math.cos(bt + 2.6 - Math.PI) * 26, cy + Math.sin(bt + 2.6 - Math.PI) * 26);
+    c.lineTo(cx + Math.cos(bt - 2.6 - Math.PI) * 26, cy + Math.sin(bt - 2.6 - Math.PI) * 26); c.closePath(); c.fill();
+    c.fillStyle = BG; c.beginPath(); c.arc(cx, cy, 12, 0, Math.PI * 2); c.fill(); c.strokeStyle = acc; c.lineWidth = 3; c.stroke();
+    c.fillStyle = 'rgba(236,232,225,.6)'; c.font = `700 22px "Barlow", sans-serif`;
+    c.fillText(`ROTA ${String(bearing).padStart(3, '0')}°`, 60, 300); c.fillText(`AJAN: ${up(agName || '-')}`, 60, 332);
+  } else if (style === 'halftone') {
+    // Yarım ton nokta posteri + tekrar eden ajan adı
+    const ang = -0.35 + rnd() * 0.2;
+    for (let y = 0; y < HERO; y += 26) for (let x = 0; x < W; x += 26) {
+      const tt = (x * Math.cos(ang) + y * Math.sin(ang)) / W;
+      const r = Math.max(0, 11 * (tt - 0.15));
+      if (r < 0.6) continue;
+      c.fillStyle = acc; c.globalAlpha = 0.55; c.beginPath(); c.arc(x, y, Math.min(11, r), 0, Math.PI * 2); c.fill();
+    }
+    c.globalAlpha = 1;
+    if (agName) {
+      c.save(); c.translate(70, 40); c.font = `900 150px ${disp}`; c.globalAlpha = 0.09; c.fillStyle = TXT;
+      for (let i = 0; i < 3; i++) c.fillText(up(agName), (i % 2) * 120, 300 + i * 140);
+      c.restore();
+    }
+  } else {
+    // Üçgen ızgara (varsayılan)
+    const T = 90;
+    for (let y = -T; y < HERO; y += T * 0.866) for (let x = -T; x < W + T; x += T) {
+      const off = (Math.round(y / (T * 0.866)) % 2) * T / 2;
+      const a = rnd();
+      if (a < 0.55) continue;
+      c.fillStyle = a > 0.93 ? acc : `rgba(236,232,225,${(a - 0.55) * 0.12})`;
+      c.globalAlpha = a > 0.93 ? 0.55 : 1;
+      c.beginPath(); c.moveTo(x + off, y); c.lineTo(x + off + T, y); c.lineTo(x + off + T / 2, y + T * 0.866); c.closePath(); c.fill();
+    }
+    c.globalAlpha = 1;
+    c.fillStyle = acc; c.globalAlpha = 0.22; c.beginPath(); c.moveTo(W * 0.5, 0); c.lineTo(W, 0); c.lineTo(W, HERO * 0.85); c.closePath(); c.fill(); c.globalAlpha = 1;
+    bigText(agName, HERO * 0.5, -0.08, W * 1.05);
+  }
+  c.restore();
+}
 async function drawWrapped(p) {
   const cv = document.getElementById('wr-cv');
   if (!cv) return;
@@ -369,13 +503,7 @@ async function drawWrapped(p) {
     c.drawImage(photo, (W - pw) / 2, HERO - phh, pw, phh);
     c.restore();
   } else {
-    const g = c.createLinearGradient(0, 0, W, HERO);
-    g.addColorStop(0, '#1e2f3d'); g.addColorStop(1, BG);
-    c.fillStyle = g; c.fillRect(0, 0, W, HERO);
-    c.save(); c.globalAlpha = 0.07; c.fillStyle = TXT;
-    const ini = up(p.name.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü0-9]/g, '').slice(0, 2) || '?');
-    c.font = `900 620px ${disp}`; c.textAlign = 'center'; c.fillText(ini, W / 2, 640); c.restore();
-    c.fillStyle = 'rgba(255,70,85,.16)'; c.beginPath(); c.moveTo(W * 0.55, 0); c.lineTo(W, 0); c.lineTo(W, HERO * 0.8); c.closePath(); c.fill();
+    heroArt(c, p, D, W, HERO, (window.CARD_STYLE || S.cfg.card_style || 'auto'));
   }
   // alt kısma doğru koyulaşma
   const fade = c.createLinearGradient(0, HERO - 110, 0, HERO);

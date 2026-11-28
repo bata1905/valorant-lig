@@ -74,7 +74,7 @@ async function loadAssets() {
   (maps || []).forEach((m) => {
     S.assets.maps[m.displayName] = { mini: m.displayIcon, splash: m.listViewIcon || m.splash, xm: m.xMultiplier, ym: m.yMultiplier, xa: m.xScalarToAdd, ya: m.yScalarToAdd };
   });
-  (agents || []).forEach((a) => { S.assets.agents[a.displayName] = { icon: a.displayIcon }; });
+  (agents || []).forEach((a) => { S.assets.agents[a.displayName] = { icon: a.displayIcon, role: a.role ? a.role.displayName : null }; });
   (weapons || []).forEach((w) => { S.assets.weapons[w.displayName] = { icon: w.killStreamIcon || w.displayIcon, cat: (w.category || '').split('::').pop() }; });
 }
 
